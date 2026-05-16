@@ -29,9 +29,9 @@ Depois, na raiz: build API, arrancar API, build web com `VITE_API_URL`, e `pnpm 
 
 | Data (UTC) | Branch | Commit (curto) | integration | Notas / link run |
 |--------------|--------|----------------|-------------|------------------|
-| *—* | *preencher após primeiro job `integration` verde no GitHub* | *SHA 7 chars* | *verde* | *URL do run em Actions → workflow CI → job integration* |
+| 2026-05-16 | main | d0a66fd | *aguardar confirmação* | [Actions CI](https://github.com/tonisvasconcelos/navomnisERP/actions/workflows/ci.yml) — push inicial `chore: initial monorepo…`; confirmar job **integration** verde e actualizar coluna para `verde`. |
 
-**Nota (2026-05-16):** primeiro commit inicial pendente no remote; após `git push`, abrir Actions e preencher a linha com o SHA do commit que disparou o workflow. Paridade local: [ci-integration.md](./ci-integration.md) (requer Docker ou Postgres/Redis locais).
+Paridade local: [ci-integration.md](./ci-integration.md) (requer Docker ou Postgres/Redis locais; Docker não disponível na máquina de desenvolvimento que registou este commit).
 
 **Nota (V6 Sprint 1):** o preenchimento da linha acima exige acesso ao GitHub Actions no repositório remoto. Em ambiente sem `gh` CLI, abrir o repositório no browser, copiar o URL do run verde e colar na coluna final. Paridade local opcional: secção “Verificação local” + [ci-integration.md](./ci-integration.md).
 
