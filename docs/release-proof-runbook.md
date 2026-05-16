@@ -2,6 +2,8 @@
 
 Objectivo: registar **prova operacional** sem inventar resultados. Use os ficheiros de log indicados; deixe placeholders até executar em GitHub/staging.
 
+Fluxo Git: integração contínua em **`develop`** (PRs); release para **`main`** — ver [git-workflow.md](./git-workflow.md).
+
 ## 1. CI — job `integration` (GitHub Actions)
 
 | Passo | Comando / acção | Registo |

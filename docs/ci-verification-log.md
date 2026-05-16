@@ -5,7 +5,7 @@ Este ficheiro é **manual**: após cada verificação importante do pipeline, at
 ## Como verificar no GitHub
 
 1. Abrir **Actions** no repositório e selecionar o workflow **CI**.
-2. Escolher o **run** mais recente na branch alvo (`main` / `develop` ou PR).
+2. Escolher o **run** mais recente na branch alvo (`develop` para integração contínua; `main` para release; ou PR para `develop`/`main`).
 3. Confirmar que o job **`integration`** está **verde** (ícone de sucesso).
 4. Jobs anteriores: **`quality`** deve também estar verde.
 5. Em caso de falha, descarregar os artefactos:

@@ -2,6 +2,16 @@
 
 Monorepo enterprise: **React + Vite** (`apps/web`), **NestJS + Prisma** (`apps/api`), **Capacitor** (`apps/mobile`), PostgreSQL, Redis (BullMQ).
 
+## Git workflow
+
+Day-to-day development uses **`develop`** and pull requests; **`main`** is for production releases.
+
+- Branch from `develop`: `git checkout develop && git pull && git checkout -b feature/my-change`
+- Open PR **into `develop`** (CI must pass: `quality` + `integration`)
+- Release: PR **`develop` → `main`** after staging proof
+
+Full guide: [docs/git-workflow.md](docs/git-workflow.md)
+
 ## Pré-requisitos
 
 - Node 20+

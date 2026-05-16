@@ -5,8 +5,17 @@ name: Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   workflow_dispatch:
+    inputs:
+      environment:
+        description: Target environment
+        required: true
+        default: staging
+        type: choice
+        options:
+          - staging
+          - production
 
 concurrency:
   group: deploy-${{ github.ref }}
@@ -16,7 +25,10 @@ jobs:
   deploy-web:
     name: Vercel (web)
     runs-on: ubuntu-latest
-    if: ${{ secrets.VERCEL_TOKEN != '' }}
+    if: >-
+      secrets.VERCEL_TOKEN != '' &&
+      (github.ref == 'refs/heads/main' ||
+        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment:
       name: production
     steps:
@@ -40,7 +52,10 @@ jobs:
   deploy-railway:
     name: Railway (API / worker)
     runs-on: ubuntu-latest
-    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    if: >-
+      secrets.RAILWAY_TOKEN != '' &&
+      (github.ref == 'refs/heads/main' ||
+        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment:
       name: production
     steps:
@@ -55,16 +70,49 @@ jobs:
           echo "Recomendado: integração Git nativa da Railway em vez de CLI no CI."
           echo "Release de schema: no serviço API, executar prisma migrate deploy antes do processo HTTP (ver docs/staging.md)."
 
-  deploy-railway-staging:
-    name: Railway (staging) — modelo
+  deploy-web-staging:
+    name: Vercel (web preview / staging)
     runs-on: ubuntu-latest
-    if: false
+    if: >-
+      secrets.VERCEL_TOKEN != '' &&
+      (github.ref == 'refs/heads/develop' ||
+        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment:
       name: staging
     steps:
       - uses: actions/checkout@v4
-      - name: Placeholder
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy preview to Vercel
+        working-directory: apps/web
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy --token "$VERCEL_TOKEN" --yes
+
+  deploy-railway-staging:
+    name: Railway (staging)
+    runs-on: ubuntu-latest
+    if: >-
+      secrets.RAILWAY_TOKEN != '' &&
+      (github.ref == 'refs/heads/develop' ||
+        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Staging redeploy
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
         run: |
-          echo "Ative este job quando tiver RAILWAY_TOKEN + IDs de serviço/projeto."
-          echo "Exemplo: railway redeploy --service <api_service_id> --environment staging"
-          echo "Ou ligue a integração Git da Railway à branch develop (recomendado)."
+          echo "Configure: railway redeploy --service <api_staging> --environment staging"
+          echo "Prefer Railway Git integration on branch develop — see docs/git-workflow.md"
