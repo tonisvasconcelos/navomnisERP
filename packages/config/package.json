@@ -1,0 +1,27 @@
+{
+  "name": "@navomnis/config",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "lint": "node -e \"process.exit(0)\"",
+    "build": "node -e \"process.exit(0)\""
+  },
+  "files": [
+    "eslint",
+    "typescript"
+  ],
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.18.1",
+    "@typescript-eslint/parser": "^8.18.1",
+    "eslint": "^8.57.1",
+    "eslint-plugin-react-hooks": "^5.1.0",
+    "typescript": "^5.7.2"
+  },
+  "exports": {
+    "./eslint/base": "./eslint/base.cjs",
+    "./eslint/react": "./eslint/react.cjs",
+    "./typescript/base.json": "./typescript/base.json",
+    "./typescript/nest.json": "./typescript/nest.json",
+    "./typescript/react.json": "./typescript/react.json"
+  }
+}

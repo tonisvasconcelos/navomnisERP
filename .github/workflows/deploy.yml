@@ -1,0 +1,70 @@
+# Deploy em `main`: web (Vercel) e gancho opcional Railway.
+# Configure os secrets no repositório / ambiente GitHub antes de ativar os passos.
+
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  deploy-web:
+    name: Vercel (web)
+    runs-on: ubuntu-latest
+    if: ${{ secrets.VERCEL_TOKEN != '' }}
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy to Vercel
+        working-directory: apps/web
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy --prod --token "$VERCEL_TOKEN" --yes
+
+  deploy-railway:
+    name: Railway (API / worker)
+    runs-on: ubuntu-latest
+    if: ${{ secrets.RAILWAY_TOKEN != '' }}
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+      - name: Redeploy (ajuste o serviço alvo na Railway)
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          echo "Defina aqui os comandos alvo (ex.: railway redeploy --service api)."
+          echo "Recomendado: integração Git nativa da Railway em vez de CLI no CI."
+          echo "Release de schema: no serviço API, executar prisma migrate deploy antes do processo HTTP (ver docs/staging.md)."
+
+  deploy-railway-staging:
+    name: Railway (staging) — modelo
+    runs-on: ubuntu-latest
+    if: false
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+      - name: Placeholder
+        run: |
+          echo "Ative este job quando tiver RAILWAY_TOKEN + IDs de serviço/projeto."
+          echo "Exemplo: railway redeploy --service <api_service_id> --environment staging"
+          echo "Ou ligue a integração Git da Railway à branch develop (recomendado)."

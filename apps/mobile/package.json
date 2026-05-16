@@ -1,0 +1,22 @@
+{
+  "name": "@navomnis/mobile",
+  "version": "0.0.1",
+  "private": true,
+  "scripts": {
+    "build": "pnpm --filter @navomnis/web run build && npx cap copy",
+    "cap": "cap",
+    "sync": "npx cap sync",
+    "lint": "node -e \"process.exit(0)\""
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.2.0",
+    "@capacitor/core": "^6.2.0",
+    "@capacitor/ios": "^6.2.0",
+    "@capacitor/preferences": "^6.0.2",
+    "@capacitor/push-notifications": "^6.0.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.2.0",
+    "typescript": "^5.7.2"
+  }
+}

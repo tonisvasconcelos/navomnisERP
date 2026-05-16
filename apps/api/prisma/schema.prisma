@@ -1,0 +1,2397 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TenantStatus {
+  ACTIVE
+  SUSPENDED
+  PROVISIONING
+}
+
+enum PartyKind {
+  CUSTOMER
+  SUPPLIER
+  BOTH
+}
+
+enum DocumentStatus {
+  DRAFT
+  OPEN
+  RELEASED
+  POSTED
+  CANCELLED
+}
+
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+  PUSH
+}
+
+enum NotificationType {
+  PURCHASE_ORDER_CONFIRMED
+  SALES_ORDER_CONFIRMED
+  GOODS_RECEIPT
+  INVOICE_OVERDUE
+  APPROVAL_PENDING
+  PASSWORD_RESET
+  PENDING_TASKS
+  STATUS_CHANGED
+  SUSPICIOUS_LOGIN
+  FINANCIAL_ALERT
+  FISCAL_ALERT
+}
+
+enum ConsentKind {
+  TERMS_OF_SERVICE
+  PRIVACY_POLICY
+  MARKETING
+  COOKIES_ANALYTICS
+}
+
+enum FiscalJurisdictionLevel {
+  FEDERAL
+  STATE
+  MUNICIPAL
+  FOREIGN
+}
+
+enum BrazilianFiscalRegime {
+  SIMPLES_NACIONAL
+  LUCRO_PRESUMIDO
+  LUCRO_REAL
+  MEI
+  RURAL_PRODUCER
+  EXEMPT
+}
+
+enum TaxpayerType {
+  CONTRIBUTOR
+  NON_CONTRIBUTOR
+  EXEMPT
+  CONSUMER
+  FOREIGN
+}
+
+enum FiscalDocumentDirection {
+  OUTBOUND
+  INBOUND
+}
+
+enum FiscalDocumentKind {
+  SALES_QUOTE
+  SALES_ORDER
+  SALES_INVOICE
+  SALES_CREDIT_NOTE
+  SALES_RETURN
+  PURCHASE_ORDER
+  GOODS_RECEIPT
+  PURCHASE_INVOICE
+  SERVICE_INVOICE
+  TAX_ADJUSTMENT
+}
+
+enum FiscalDocumentAuthorizationStatus {
+  DRAFT
+  VALIDATED
+  PENDING_AUTHORIZATION
+  AUTHORIZED
+  REJECTED
+  CANCELLED
+  CONTINGENCY
+  POSTED
+}
+
+enum BrazilianTaxKind {
+  ICMS
+  ICMS_ST
+  IPI
+  ISS
+  PIS
+  COFINS
+  DIFAL
+  FCP
+  IRRF
+  CSLL
+  INSS
+  FUNRURAL
+  FREIGHT_TAX
+  IMPORT_DUTY
+  IBS
+  CBS
+  IS
+}
+
+enum TaxRuleBaseStrategy {
+  LINE_AMOUNT
+  DOCUMENT_AMOUNT
+  CUSTOMS_VALUE
+  FREIGHT_AMOUNT
+  SERVICE_AMOUNT
+  PREVIOUS_TAX_AMOUNT
+  FORMULA
+}
+
+enum PostingJournalStatus {
+  DRAFT
+  PREVIEWED
+  VALIDATED
+  POSTED
+  CANCELLED
+}
+
+enum LedgerSide {
+  DEBIT
+  CREDIT
+}
+
+enum FiscalRegisterStatus {
+  DRAFT
+  ACTIVE
+  INACTIVE
+}
+
+enum ItemFiscalType {
+  MERCHANDISE
+  RAW_MATERIAL
+  FINISHED_GOOD
+  FIXED_ASSET
+  CONSUMABLE
+  FUEL
+  IMPORTED
+  SERVICE_BUNDLE
+  OTHER
+}
+
+enum ServiceFiscalType {
+  SERVICE
+  COMMUNICATION
+  TRANSPORT
+  CONSTRUCTION
+  DIGITAL
+  PUBLIC_SERVICE
+  OTHER
+}
+
+enum LaborRegime {
+  CLT
+  STATUTORY
+  APPRENTICE
+  INTERN
+  CONTRACTOR
+  DIRECTOR
+  TEMPORARY
+  OTHER
+}
+
+enum WeightControlType {
+  FIXED_QUANTITY
+  VARIABLE_WEIGHT
+  CATCH_WEIGHT
+}
+
+enum WarehouseZoneType {
+  AMBIENT
+  COLD_ROOM
+  RIPENING
+  RECEIVING
+  PICKING
+  EXPEDITION
+  QUARANTINE
+  WASTE
+}
+
+enum ProduceLotStatus {
+  AVAILABLE
+  QUARANTINED
+  RESERVED
+  EXPIRED
+  CONSUMED
+  DISCARDED
+}
+
+enum QualityInspectionStatus {
+  PENDING
+  APPROVED
+  PARTIALLY_APPROVED
+  REJECTED
+}
+
+enum InventoryLossReason {
+  SPOILAGE
+  SHRINKAGE
+  DAMAGE
+  QUALITY_RECLASSIFICATION
+  WEIGHT_VARIANCE
+  THEFT
+  OTHER
+}
+
+enum DeliveryRouteStatus {
+  PLANNED
+  LOADING
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+enum LandedCostAllocationBasis {
+  WEIGHT
+  VALUE
+  QUANTITY
+  MANUAL
+}
+
+model Tenant {
+  id            String       @id @default(uuid())
+  slug          String       @unique
+  name          String
+  status        TenantStatus @default(PROVISIONING)
+  retentionDays Int?
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+  deletedAt     DateTime?
+
+  branding                 TenantBranding?
+  userTenants              UserTenant[]
+  companies                Company[]
+  parties                  Party[]
+  items                    Item[]
+  roles                    Role[]
+  notifications            Notification[]
+  auditLogs                AuditLog[]
+  salesOrders              SalesOrder[]
+  purchaseOrders           PurchaseOrder[]
+  itemLedger               ItemLedgerEntry[]
+  glAccounts               ChartOfAccount[]
+  glEntries                GlEntry[]
+  workflows                ApprovalWorkflow[]
+  opportunities            Opportunity[]
+  outboxEvents             OutboxEvent[]
+  attachments              Attachment[]
+  notificationPreferences  NotificationPreference[]
+  numberSeries             DocumentNumberSeries[]
+  fiscalJurisdictions      FiscalJurisdiction[]
+  fiscalRegimeSetups       FiscalRegimeSetup[]
+  taxAreas                 TaxArea[]
+  taxGroups                TaxGroup[]
+  fiscalOperationTypes     FiscalOperationType[]
+  taxDeterminationRules    TaxDeterminationRule[]
+  productFiscalProfiles    ProductFiscalProfile[]
+  partyFiscalProfiles      PartyFiscalProfile[]
+  itemFiscalTemplates      ItemFiscalTemplate[]
+  serviceFiscalTemplates   ServiceFiscalTemplate[]
+  companyFiscalProfiles    CompanyFiscalProfile[]
+  branches                 Branch[]
+  branchFiscalProfiles     BranchFiscalProfile[]
+  employees                Employee[]
+  employeeTaxProfiles      EmployeeTaxProfile[]
+  agriculturalItemProfiles AgriculturalItemProfile[]
+  packagingTypes           PackagingType[]
+  warehouses               Warehouse[]
+  warehouseZones           WarehouseZone[]
+  inventoryLots            InventoryLot[]
+  qualityInspections       QualityInspection[]
+  inventoryLossEvents      InventoryLossEvent[]
+  inventoryValueEntries    InventoryValueEntry[]
+  landedCostAllocations    LandedCostAllocation[]
+  deliveryRoutes           DeliveryRoute[]
+  fiscalDocuments          FiscalDocument[]
+  fiscalDocumentLines      FiscalDocumentLine[]
+  fiscalDocumentLineTaxes  FiscalDocumentLineTax[]
+  postingJournals          PostingJournal[]
+  postingJournalLines      PostingJournalLine[]
+  postingSetups            PostingSetup[]
+  taxPostingSetups         TaxPostingSetup[]
+  fiscalPostingSetups      FiscalPostingSetup[]
+  customerLedgerEntries    CustomerLedgerEntry[]
+  supplierLedgerEntries    SupplierLedgerEntry[]
+  bankLedgerEntries        BankLedgerEntry[]
+  taxLedgerEntries         TaxLedgerEntry[]
+  taxSettlementEntries     TaxSettlementLedgerEntry[]
+  financialInstitutions    FinancialInstitution[]
+  bankConnections          BankConnection[]
+  bankConsents             BankConsent[]
+  bankOAuthSessions        BankOAuthSession[]
+  bankAccounts             BankAccount[]
+  bankBalances             BankBalance[]
+  bankTransactions         BankTransaction[]
+  bankSyncJobs             BankSyncJob[]
+  bankWebhookInbox         BankWebhookInbox[]
+  reconciliationRules      ReconciliationRule[]
+  reconciliationMatches    ReconciliationMatch[]
+  bankingAccessLogs        BankingAccessLog[]
+}
+
+model DocumentNumberSeries {
+  id         String   @id @default(uuid())
+  tenantId   String
+  code       String
+  lastNumber Int      @default(0)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+}
+
+model TenantBranding {
+  id           String   @id @default(uuid())
+  tenantId     String   @unique
+  logoUrl      String?
+  primaryColor String?  @default("#0f172a")
+  accentColor  String?  @default("#2563eb")
+  emailFooter  String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String?
+  displayName  String
+  locale       String    @default("pt-BR")
+  mfaEnabled   Boolean   @default(false)
+  mfaSecret    String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  refreshTokens       RefreshToken[]
+  accounts            Account[]
+  userTenants         UserTenant[]
+  userCompanies       UserCompany[]
+  userRoles           UserRole[]
+  accessLogs          AccessLog[]
+  consentRecords      ConsentRecord[]
+  notificationPrefs   NotificationPreference[]
+  notifications       Notification[]           @relation("NotificationUser")
+  auditLogs           AuditLog[]               @relation("AuditActor")
+  createdParties      Party[]                  @relation("PartyCreatedBy")
+  updatedParties      Party[]                  @relation("PartyUpdatedBy")
+  qualityInspections  QualityInspection[]      @relation("QualityInspector")
+  inventoryLossEvents InventoryLossEvent[]     @relation("InventoryLossCreatedBy")
+  bankConsents        BankConsent[]            @relation("BankConsentAuthorizer")
+  bankingAccessLogs   BankingAccessLog[]
+}
+
+model Account {
+  id                String   @id @default(uuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  accessToken       String?
+  refreshToken      String?
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model RefreshToken {
+  id          String    @id @default(uuid())
+  userId      String
+  jti         String    @unique
+  hashedToken String
+  userAgent   String?
+  ip          String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model UserTenant {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId])
+  @@index([tenantId])
+}
+
+model Company {
+  id        String    @id @default(uuid())
+  tenantId  String
+  name      String
+  taxId     String?
+  isHead    Boolean   @default(false)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  tenant                Tenant                     @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  userCompanies         UserCompany[]
+  salesOrders           SalesOrder[]
+  purchaseOrders        PurchaseOrder[]
+  fiscalRegimes         FiscalRegimeSetup[]
+  fiscalDocuments       FiscalDocument[]
+  postingJournals       PostingJournal[]
+  customerLedgerEntries CustomerLedgerEntry[]
+  supplierLedgerEntries SupplierLedgerEntry[]
+  bankLedgerEntries     BankLedgerEntry[]
+  taxLedgerEntries      TaxLedgerEntry[]
+  taxSettlementEntries  TaxSettlementLedgerEntry[]
+  fiscalProfiles        CompanyFiscalProfile[]
+  branches              Branch[]
+  employees             Employee[]
+  bankConnections       BankConnection[]
+  bankConsents          BankConsent[]
+  bankAccounts          BankAccount[]
+  bankTransactions      BankTransaction[]
+  bankBalances          BankBalance[]
+  reconciliationRules   ReconciliationRule[]
+  reconciliationMatches ReconciliationMatch[]
+
+  @@index([tenantId, name])
+}
+
+model UserCompany {
+  id        String   @id @default(uuid())
+  userId    String
+  companyId String
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, companyId])
+}
+
+model Role {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant          Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([tenantId, name])
+}
+
+model Permission {
+  id   String @id @default(uuid())
+  code String @unique
+  name String
+
+  rolePermissions RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model UserRole {
+  id     String @id @default(uuid())
+  userId String
+  roleId String
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, roleId])
+}
+
+model Party {
+  id          String    @id @default(uuid())
+  tenantId    String
+  kind        PartyKind
+  name        String
+  taxId       String?
+  email       String?
+  phone       String?
+  creditLimit Decimal?  @db.Decimal(18, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  deletedAt   DateTime?
+  version     Int       @default(1)
+  createdById String?
+  updatedById String?
+
+  tenant                Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdBy             User?                     @relation("PartyCreatedBy", fields: [createdById], references: [id])
+  updatedBy             User?                     @relation("PartyUpdatedBy", fields: [updatedById], references: [id])
+  salesOrders           SalesOrder[]              @relation("SalesOrderCustomer")
+  purchaseOrders        PurchaseOrder[]           @relation("PurchaseOrderVendor")
+  fiscalProfile         PartyFiscalProfile?
+  fiscalDocuments       FiscalDocument[]
+  customerLedgerEntries CustomerLedgerEntry[]
+  supplierLedgerEntries SupplierLedgerEntry[]
+  producedItemProfiles  AgriculturalItemProfile[] @relation("AgriculturalProducer")
+  producedLots          InventoryLot[]            @relation("LotProducer")
+
+  @@index([tenantId, kind, name])
+}
+
+model Item {
+  id                   String    @id @default(uuid())
+  tenantId             String
+  sku                  String
+  name                 String
+  baseUom              String    @default("UN")
+  isActive             Boolean   @default(true)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  deletedAt            DateTime?
+  version              Int       @default(1)
+  itemFiscalTemplateId String?
+
+  tenant                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  itemFiscalTemplate    ItemFiscalTemplate?      @relation(fields: [itemFiscalTemplateId], references: [id], onDelete: SetNull)
+  ledger                ItemLedgerEntry[]
+  salesLines            SalesOrderLine[]
+  purchaseLines         PurchaseOrderLine[]
+  fiscalProfile         ProductFiscalProfile?
+  fiscalDocumentLines   FiscalDocumentLine[]
+  agriculturalProfile   AgriculturalItemProfile?
+  inventoryLots         InventoryLot[]
+  qualityInspections    QualityInspection[]
+  inventoryLossEvents   InventoryLossEvent[]
+  inventoryValueEntries InventoryValueEntry[]
+
+  @@unique([tenantId, sku])
+  @@index([tenantId, itemFiscalTemplateId])
+}
+
+model ChartOfAccount {
+  id        String   @id @default(uuid())
+  tenantId  String
+  code      String
+  name      String
+  isPosting Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  glEntries GlEntry[]
+
+  @@unique([tenantId, code])
+}
+
+model GlEntry {
+  id           String   @id @default(uuid())
+  tenantId     String
+  postingDate  DateTime
+  accountId    String
+  description  String?
+  debit        Decimal  @default(0) @db.Decimal(18, 2)
+  credit       Decimal  @default(0) @db.Decimal(18, 2)
+  documentType String?
+  documentId   String?
+  createdAt    DateTime @default(now())
+
+  tenant  Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  account ChartOfAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, postingDate])
+}
+
+model SalesOrder {
+  id          String         @id @default(uuid())
+  tenantId    String
+  companyId   String
+  customerId  String
+  number      String
+  status      DocumentStatus @default(DRAFT)
+  orderDate   DateTime       @default(now())
+  totalAmount Decimal        @default(0) @db.Decimal(18, 2)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  version     Int            @default(1)
+
+  tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Party            @relation("SalesOrderCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  lines    SalesOrderLine[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, status])
+  @@index([tenantId, companyId, orderDate])
+  @@index([tenantId, customerId, orderDate])
+}
+
+model SalesOrderLine {
+  id            String   @id @default(uuid())
+  orderId       String
+  itemId        String
+  quantity      Decimal  @db.Decimal(18, 4)
+  unitPrice     Decimal  @db.Decimal(18, 4)
+  lineTotal     Decimal  @db.Decimal(18, 2)
+  lotId         String?
+  packageTypeId String?
+  grossWeightKg Decimal? @db.Decimal(18, 4)
+  tareWeightKg  Decimal? @db.Decimal(18, 4)
+  netWeightKg   Decimal? @db.Decimal(18, 4)
+  qualityGrade  String?
+
+  order       SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item        Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  lot         InventoryLot?  @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  packageType PackagingType? @relation(fields: [packageTypeId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([lotId])
+}
+
+model PurchaseOrder {
+  id          String         @id @default(uuid())
+  tenantId    String
+  companyId   String
+  vendorId    String
+  number      String
+  status      DocumentStatus @default(DRAFT)
+  orderDate   DateTime       @default(now())
+  totalAmount Decimal        @default(0) @db.Decimal(18, 2)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  version     Int            @default(1)
+
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  vendor                Party                  @relation("PurchaseOrderVendor", fields: [vendorId], references: [id], onDelete: Restrict)
+  lines                 PurchaseOrderLine[]
+  qualityInspections    QualityInspection[]
+  landedCostAllocations LandedCostAllocation[]
+
+  @@unique([tenantId, number])
+  @@index([tenantId, vendorId, orderDate])
+  @@index([tenantId, companyId, orderDate])
+}
+
+model PurchaseOrderLine {
+  id                 String   @id @default(uuid())
+  orderId            String
+  itemId             String
+  quantity           Decimal  @db.Decimal(18, 4)
+  unitCost           Decimal  @db.Decimal(18, 4)
+  lineTotal          Decimal  @db.Decimal(18, 2)
+  lotId              String?
+  packageTypeId      String?
+  grossWeightKg      Decimal? @db.Decimal(18, 4)
+  tareWeightKg       Decimal? @db.Decimal(18, 4)
+  netWeightKg        Decimal? @db.Decimal(18, 4)
+  qualityGrade       String?
+  freightCostAmount  Decimal  @default(0) @db.Decimal(18, 2)
+  handlingCostAmount Decimal  @default(0) @db.Decimal(18, 2)
+  landedCostAmount   Decimal  @default(0) @db.Decimal(18, 2)
+
+  order       PurchaseOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item        Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  lot         InventoryLot?  @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  packageType PackagingType? @relation(fields: [packageTypeId], references: [id], onDelete: Restrict)
+
+  @@index([orderId])
+  @@index([lotId])
+}
+
+model ItemLedgerEntry {
+  id           String   @id @default(uuid())
+  tenantId     String
+  itemId       String
+  quantity     Decimal  @db.Decimal(18, 4)
+  lotId        String?
+  warehouseId  String?
+  zoneId       String?
+  valueEntryId String?
+  entryType    String
+  documentType String?
+  documentId   String?
+  postingDate  DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item       Item                 @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lot        InventoryLot?        @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  warehouse  Warehouse?           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  zone       WarehouseZone?       @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  valueEntry InventoryValueEntry? @relation(fields: [valueEntryId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, itemId, postingDate])
+  @@index([tenantId, lotId, postingDate])
+  @@index([tenantId, warehouseId, zoneId])
+}
+
+model ApprovalWorkflow {
+  id        String   @id @default(uuid())
+  tenantId  String
+  name      String
+  module    String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  tenant Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps  ApprovalStep[]
+}
+
+model ApprovalStep {
+  id         String @id @default(uuid())
+  workflowId String
+  stepOrder  Int
+  name       String
+
+  workflow ApprovalWorkflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  tasks    ApprovalTask[]
+}
+
+model ApprovalTask {
+  id        String   @id @default(uuid())
+  stepId    String
+  status    String   @default("PENDING")
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  step ApprovalStep @relation(fields: [stepId], references: [id], onDelete: Cascade)
+}
+
+model Opportunity {
+  id        String   @id @default(uuid())
+  tenantId  String
+  title     String
+  stage     String
+  amount    Decimal? @db.Decimal(18, 2)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+}
+
+model Notification {
+  id        String           @id @default(uuid())
+  tenantId  String
+  userId    String
+  type      NotificationType
+  title     String
+  body      String
+  readAt    DateTime?
+  metadata  Json?
+  createdAt DateTime         @default(now())
+
+  tenant     Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user       User                   @relation("NotificationUser", fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([tenantId, userId, createdAt])
+}
+
+model NotificationPreference {
+  id       String              @id @default(uuid())
+  userId   String
+  tenantId String
+  channel  NotificationChannel
+  type     NotificationType
+  enabled  Boolean             @default(true)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, tenantId, channel, type])
+}
+
+model NotificationDelivery {
+  id             String              @id @default(uuid())
+  notificationId String
+  channel        NotificationChannel
+  status         String              @default("QUEUED")
+  attempts       Int                 @default(0)
+  lastError      String?
+  sentAt         DateTime?
+  createdAt      DateTime            @default(now())
+
+  notification Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+}
+
+model EmailTemplate {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  subject   String
+  htmlBody  String
+  version   Int      @default(1)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String?
+  actorId    String?
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ip         String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actor  User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, createdAt])
+}
+
+model AccessLog {
+  id        String   @id @default(uuid())
+  userId    String
+  ip        String?
+  userAgent String?
+  success   Boolean
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model LegalDocumentVersion {
+  id          String      @id @default(uuid())
+  kind        ConsentKind
+  version     String
+  content     String
+  effectiveAt DateTime    @default(now())
+  createdAt   DateTime    @default(now())
+}
+
+model ConsentRecord {
+  id         String      @id @default(uuid())
+  userId     String
+  kind       ConsentKind
+  version    String
+  acceptedAt DateTime    @default(now())
+  ip         String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind])
+}
+
+model Attachment {
+  id         String   @id @default(uuid())
+  tenantId   String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  storageKey String
+  version    Int      @default(1)
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, storageKey])
+}
+
+model OutboxEvent {
+  id          String    @id @default(uuid())
+  tenantId    String?
+  type        String
+  payload     Json
+  publishedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@index([publishedAt])
+  @@index([tenantId, publishedAt, type])
+}
+
+model FiscalJurisdiction {
+  id               String                  @id @default(uuid())
+  tenantId         String
+  code             String
+  name             String
+  level            FiscalJurisdictionLevel
+  countryCode      String                  @default("BR")
+  stateCode        String?
+  municipalityCode String?
+  ibgeCode         String?
+  effectiveFrom    DateTime                @default(now())
+  effectiveTo      DateTime?
+  isActive         Boolean                 @default(true)
+  metadata         Json?
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  tenant                  Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  originTaxAreas          TaxArea[]               @relation("TaxAreaOriginJurisdiction")
+  destinationTaxAreas     TaxArea[]               @relation("TaxAreaDestinationJurisdiction")
+  originRules             TaxDeterminationRule[]  @relation("TaxRuleOriginJurisdiction")
+  destinationRules        TaxDeterminationRule[]  @relation("TaxRuleDestinationJurisdiction")
+  fiscalDocumentLineTaxes FiscalDocumentLineTax[]
+  taxLedgerEntries        TaxLedgerEntry[]
+  branches                Branch[]
+  branchFiscalProfiles    BranchFiscalProfile[]
+
+  @@unique([tenantId, code, effectiveFrom])
+  @@index([tenantId, level, stateCode, municipalityCode])
+  @@index([tenantId, isActive, effectiveFrom, effectiveTo])
+}
+
+model FiscalRegimeSetup {
+  id        String                @id @default(uuid())
+  tenantId  String
+  companyId String?
+  regime    BrazilianFiscalRegime
+  validFrom DateTime
+  validTo   DateTime?
+  isDefault Boolean               @default(false)
+  notes     String?
+  createdAt DateTime              @default(now())
+  updatedAt DateTime              @updatedAt
+
+  tenant  Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, companyId, validFrom, validTo])
+  @@index([tenantId, regime, validFrom])
+}
+
+model TaxArea {
+  id                        String    @id @default(uuid())
+  tenantId                  String
+  code                      String
+  name                      String
+  originJurisdictionId      String?
+  destinationJurisdictionId String?
+  effectiveFrom             DateTime  @default(now())
+  effectiveTo               DateTime?
+  isActive                  Boolean   @default(true)
+  metadata                  Json?
+  createdAt                 DateTime  @default(now())
+  updatedAt                 DateTime  @updatedAt
+
+  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  originJurisdiction      FiscalJurisdiction? @relation("TaxAreaOriginJurisdiction", fields: [originJurisdictionId], references: [id], onDelete: Restrict)
+  destinationJurisdiction FiscalJurisdiction? @relation("TaxAreaDestinationJurisdiction", fields: [destinationJurisdictionId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, code, effectiveFrom])
+  @@index([tenantId, isActive, effectiveFrom, effectiveTo])
+}
+
+model TaxGroup {
+  id          String   @id @default(uuid())
+  tenantId    String
+  code        String
+  name        String
+  kind        String
+  description String?
+  isActive    Boolean  @default(true)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tenant                       Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  productFiscalProfiles        ProductFiscalProfile[]  @relation("ProductTaxGroup")
+  partyFiscalProfiles          PartyFiscalProfile[]    @relation("BusinessTaxGroup")
+  itemFiscalTemplates          ItemFiscalTemplate[]    @relation("ItemTemplateTaxGroup")
+  serviceFiscalTemplates       ServiceFiscalTemplate[] @relation("ServiceTemplateTaxGroup")
+  companyDefaultBusinessGroups CompanyFiscalProfile[]  @relation("CompanyDefaultBusinessTaxGroup")
+  companyDefaultProductGroups  CompanyFiscalProfile[]  @relation("CompanyDefaultProductTaxGroup")
+  branchDefaultBusinessGroups  BranchFiscalProfile[]   @relation("BranchDefaultBusinessTaxGroup")
+  branchDefaultProductGroups   BranchFiscalProfile[]   @relation("BranchDefaultProductTaxGroup")
+  employeeTaxProfiles          EmployeeTaxProfile[]    @relation("PayrollTaxGroup")
+  rulesAsBusinessGroup         TaxDeterminationRule[]  @relation("TaxRuleBusinessGroup")
+  rulesAsProductGroup          TaxDeterminationRule[]  @relation("TaxRuleProductGroup")
+  postingSetupsAsBusinessGroup PostingSetup[]          @relation("PostingSetupBusinessGroup")
+  postingSetupsAsProductGroup  PostingSetup[]          @relation("PostingSetupProductGroup")
+
+  @@unique([tenantId, kind, code])
+  @@index([tenantId, kind, isActive])
+}
+
+model FiscalOperationType {
+  id                    String                  @id @default(uuid())
+  tenantId              String
+  code                  String
+  name                  String
+  direction             FiscalDocumentDirection
+  defaultCfop           String?
+  nfModel               String?
+  affectsInventory      Boolean                 @default(false)
+  affectsFinancial      Boolean                 @default(true)
+  requiresAuthorization Boolean                 @default(false)
+  isActive              Boolean                 @default(true)
+  metadata              Json?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+
+  tenant              Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rules               TaxDeterminationRule[]
+  fiscalDocuments     FiscalDocument[]
+  fiscalPostingSetups FiscalPostingSetup[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, direction, isActive])
+}
+
+model TaxDeterminationRule {
+  id                        String                 @id @default(uuid())
+  tenantId                  String
+  taxKind                   BrazilianTaxKind
+  priority                  Int                    @default(100)
+  operationTypeId           String?
+  businessTaxGroupId        String?
+  productTaxGroupId         String?
+  originJurisdictionId      String?
+  destinationJurisdictionId String?
+  fiscalRegime              BrazilianFiscalRegime?
+  taxpayerType              TaxpayerType?
+  cfop                      String?
+  cst                       String?
+  benefitCode               String?
+  baseStrategy              TaxRuleBaseStrategy    @default(LINE_AMOUNT)
+  formulaCode               String?
+  rate                      Decimal                @default(0) @db.Decimal(18, 6)
+  reductionRate             Decimal                @default(0) @db.Decimal(18, 6)
+  mvaRate                   Decimal                @default(0) @db.Decimal(18, 6)
+  fcpRate                   Decimal                @default(0) @db.Decimal(18, 6)
+  isRecoverable             Boolean                @default(false)
+  isWithheld                Boolean                @default(false)
+  effectiveFrom             DateTime
+  effectiveTo               DateTime?
+  isActive                  Boolean                @default(true)
+  parameters                Json?
+  legalReference            String?
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+
+  tenant                  Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operationType           FiscalOperationType?    @relation(fields: [operationTypeId], references: [id], onDelete: Restrict)
+  businessTaxGroup        TaxGroup?               @relation("TaxRuleBusinessGroup", fields: [businessTaxGroupId], references: [id], onDelete: Restrict)
+  productTaxGroup         TaxGroup?               @relation("TaxRuleProductGroup", fields: [productTaxGroupId], references: [id], onDelete: Restrict)
+  originJurisdiction      FiscalJurisdiction?     @relation("TaxRuleOriginJurisdiction", fields: [originJurisdictionId], references: [id], onDelete: Restrict)
+  destinationJurisdiction FiscalJurisdiction?     @relation("TaxRuleDestinationJurisdiction", fields: [destinationJurisdictionId], references: [id], onDelete: Restrict)
+  fiscalDocumentLineTaxes FiscalDocumentLineTax[]
+
+  @@index([tenantId, taxKind, isActive, effectiveFrom, effectiveTo])
+  @@index([tenantId, operationTypeId, businessTaxGroupId, productTaxGroupId, priority])
+}
+
+model ProductFiscalProfile {
+  id                String    @id @default(uuid())
+  tenantId          String
+  itemId            String    @unique
+  ncm               String?
+  cest              String?
+  fiscalOriginCode  String?
+  fiscalCategory    String?
+  productTaxGroupId String?
+  ipiClassCode      String?
+  benefitCode       String?
+  validFrom         DateTime  @default(now())
+  validTo           DateTime?
+  metadata          Json?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item            Item      @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  productTaxGroup TaxGroup? @relation("ProductTaxGroup", fields: [productTaxGroupId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, ncm, cest])
+  @@index([tenantId, productTaxGroupId])
+}
+
+model PartyFiscalProfile {
+  id                       String                 @id @default(uuid())
+  tenantId                 String
+  partyId                  String                 @unique
+  cnpj                     String?
+  stateRegistration        String?
+  municipalRegistration    String?
+  taxpayerType             TaxpayerType           @default(CONTRIBUTOR)
+  fiscalRegime             BrazilianFiscalRegime?
+  suframa                  String?
+  fiscalCategory           String?
+  contributorType          String?
+  consumerFinal            Boolean                @default(false)
+  businessTaxGroupId       String?
+  defaultOperationTypeCode String?
+  exemptions               Json?
+  retentionRules           Json?
+  serviceRetentionRules    Json?
+  withholdingObligations   Json?
+  creditTaxPolicy          Json?
+  recoverableTaxPolicy     Json?
+  validFrom                DateTime               @default(now())
+  validTo                  DateTime?
+  metadata                 Json?
+  createdAt                DateTime               @default(now())
+  updatedAt                DateTime               @updatedAt
+
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  party            Party     @relation(fields: [partyId], references: [id], onDelete: Cascade)
+  businessTaxGroup TaxGroup? @relation("BusinessTaxGroup", fields: [businessTaxGroupId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, cnpj])
+  @@index([tenantId, taxpayerType, fiscalRegime])
+}
+
+model ItemFiscalTemplate {
+  id                      String               @id @default(uuid())
+  tenantId                String
+  code                    String
+  name                    String
+  description             String?
+  status                  FiscalRegisterStatus @default(DRAFT)
+  ncm                     String?
+  cest                    String?
+  exTipi                  String?
+  productOrigin           String?
+  fiscalCategory          String?
+  fiscalType              ItemFiscalType       @default(MERCHANDISE)
+  taxGroupId              String?
+  fiscalBenefitCode       String?
+  spedClassification      String?
+  icmsCst                 String?
+  csosn                   String?
+  icmsAliquot             Decimal              @default(0) @db.Decimal(18, 6)
+  icmsReduction           Decimal              @default(0) @db.Decimal(18, 6)
+  icmsDeferred            Boolean              @default(false)
+  icmsExemption           Boolean              @default(false)
+  icmsBaseReduction       Decimal              @default(0) @db.Decimal(18, 6)
+  icmsStRuleCode          String?
+  mva                     Decimal              @default(0) @db.Decimal(18, 6)
+  fcpRate                 Decimal              @default(0) @db.Decimal(18, 6)
+  fcpStRate               Decimal              @default(0) @db.Decimal(18, 6)
+  difalRuleCode           String?
+  interstateRuleCode      String?
+  internalRuleCode        String?
+  ipiCst                  String?
+  ipiEnquadramento        String?
+  ipiRate                 Decimal              @default(0) @db.Decimal(18, 6)
+  ipiExemption            Boolean              @default(false)
+  pisCst                  String?
+  cofinsCst               String?
+  pisRate                 Decimal              @default(0) @db.Decimal(18, 6)
+  cofinsRate              Decimal              @default(0) @db.Decimal(18, 6)
+  monophase               Boolean              @default(false)
+  pisCofinsSt             Boolean              @default(false)
+  fiscalUom               String?
+  commercialUom           String?
+  conversionFactor        Decimal              @default(1) @db.Decimal(18, 6)
+  lotFiscalControl        Boolean              @default(false)
+  traceability            Boolean              @default(false)
+  ibsCategory             String?
+  cbsCategory             String?
+  futureVatClassification String?
+  effectiveFrom           DateTime             @default(now())
+  effectiveTo             DateTime?
+  metadata                Json?
+  createdAt               DateTime             @default(now())
+  updatedAt               DateTime             @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  taxGroup TaxGroup? @relation("ItemTemplateTaxGroup", fields: [taxGroupId], references: [id], onDelete: Restrict)
+  items    Item[]
+
+  @@unique([tenantId, code, effectiveFrom])
+  @@index([tenantId, ncm, cest])
+  @@index([tenantId, status, effectiveFrom, effectiveTo])
+  @@index([tenantId, taxGroupId])
+}
+
+model ServiceFiscalTemplate {
+  id                       String               @id @default(uuid())
+  tenantId                 String
+  code                     String
+  name                     String
+  description              String?
+  status                   FiscalRegisterStatus @default(DRAFT)
+  serviceType              ServiceFiscalType    @default(SERVICE)
+  cnae                     String?
+  municipalServiceCode     String?
+  lc116ServiceCode         String?
+  fiscalServiceCategory    String?
+  taxGroupId               String?
+  issRate                  Decimal              @default(0) @db.Decimal(18, 6)
+  issMunicipalityCode      String?
+  issRetention             Boolean              @default(false)
+  issResponsibleParty      String?
+  issExemption             Boolean              @default(false)
+  irrfRate                 Decimal              @default(0) @db.Decimal(18, 6)
+  csllRate                 Decimal              @default(0) @db.Decimal(18, 6)
+  pisRetentionRate         Decimal              @default(0) @db.Decimal(18, 6)
+  cofinsRetentionRate      Decimal              @default(0) @db.Decimal(18, 6)
+  inssRetentionRate        Decimal              @default(0) @db.Decimal(18, 6)
+  municipalityOfIncidence  String?
+  taxMunicipalityCode      String?
+  serviceLocationRule      String?
+  interstateServiceRule    String?
+  publicAgencyRule         String?
+  ibsServiceClassification String?
+  cbsServiceClassification String?
+  futureTransitionRule     String?
+  effectiveFrom            DateTime             @default(now())
+  effectiveTo              DateTime?
+  metadata                 Json?
+  createdAt                DateTime             @default(now())
+  updatedAt                DateTime             @updatedAt
+
+  tenant   Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  taxGroup TaxGroup? @relation("ServiceTemplateTaxGroup", fields: [taxGroupId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, code, effectiveFrom])
+  @@index([tenantId, serviceType, status])
+  @@index([tenantId, cnae, lc116ServiceCode])
+  @@index([tenantId, taxGroupId])
+}
+
+model CompanyFiscalProfile {
+  id                        String                @id @default(uuid())
+  tenantId                  String
+  companyId                 String
+  status                    FiscalRegisterStatus  @default(DRAFT)
+  legalName                 String
+  tradeName                 String?
+  cnpj                      String
+  stateRegistration         String?
+  municipalRegistration     String?
+  mainCnae                  String?
+  secondaryCnaes            Json?
+  fiscalRegime              BrazilianFiscalRegime
+  simplesOption             Boolean               @default(false)
+  taxStartDate              DateTime?
+  taxTransitionDate         DateTime?
+  spedProfile               String?
+  obligations               Json?
+  defaultBusinessTaxGroupId String?
+  defaultProductTaxGroupId  String?
+  defaultOperationTypeCode  String?
+  ibsRegistration           String?
+  cbsRegistration           String?
+  futureFiscalIdentifiers   Json?
+  validFrom                 DateTime              @default(now())
+  validTo                   DateTime?
+  metadata                  Json?
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+
+  tenant                  Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company                 Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  defaultBusinessTaxGroup TaxGroup? @relation("CompanyDefaultBusinessTaxGroup", fields: [defaultBusinessTaxGroupId], references: [id], onDelete: Restrict)
+  defaultProductTaxGroup  TaxGroup? @relation("CompanyDefaultProductTaxGroup", fields: [defaultProductTaxGroupId], references: [id], onDelete: Restrict)
+
+  @@unique([companyId, validFrom])
+  @@index([tenantId, cnpj])
+  @@index([tenantId, fiscalRegime, status])
+  @@index([tenantId, validFrom, validTo])
+}
+
+model Branch {
+  id                    String   @id @default(uuid())
+  tenantId              String
+  companyId             String
+  code                  String
+  name                  String
+  isHeadquarter         Boolean  @default(false)
+  cnpj                  String
+  stateRegistration     String?
+  municipalRegistration String?
+  fiscalJurisdictionId  String?
+  taxState              String?
+  taxMunicipalityCode   String?
+  address               Json?
+  isActive              Boolean  @default(true)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fiscalJurisdiction FiscalJurisdiction?   @relation(fields: [fiscalJurisdictionId], references: [id], onDelete: Restrict)
+  fiscalProfiles     BranchFiscalProfile[]
+  employees          Employee[]
+  warehouses         Warehouse[]
+
+  @@unique([tenantId, companyId, code])
+  @@index([tenantId, cnpj])
+  @@index([tenantId, companyId, isActive])
+  @@index([tenantId, fiscalJurisdictionId])
+}
+
+model BranchFiscalProfile {
+  id                        String               @id @default(uuid())
+  tenantId                  String
+  branchId                  String
+  status                    FiscalRegisterStatus @default(DRAFT)
+  fiscalJurisdictionId      String?
+  taxState                  String?
+  taxMunicipalityCode       String?
+  obligations               Json?
+  localFiscalRules          Json?
+  defaultBusinessTaxGroupId String?
+  defaultProductTaxGroupId  String?
+  defaultOperationTypeCode  String?
+  postingSetup              Json?
+  validFrom                 DateTime             @default(now())
+  validTo                   DateTime?
+  metadata                  Json?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
+
+  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch                  Branch              @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  fiscalJurisdiction      FiscalJurisdiction? @relation(fields: [fiscalJurisdictionId], references: [id], onDelete: Restrict)
+  defaultBusinessTaxGroup TaxGroup?           @relation("BranchDefaultBusinessTaxGroup", fields: [defaultBusinessTaxGroupId], references: [id], onDelete: Restrict)
+  defaultProductTaxGroup  TaxGroup?           @relation("BranchDefaultProductTaxGroup", fields: [defaultProductTaxGroupId], references: [id], onDelete: Restrict)
+
+  @@unique([branchId, validFrom])
+  @@index([tenantId, branchId, status])
+  @@index([tenantId, fiscalJurisdictionId])
+  @@index([tenantId, validFrom, validTo])
+}
+
+model Employee {
+  id                  String               @id @default(uuid())
+  tenantId            String
+  companyId           String
+  branchId            String?
+  code                String
+  fullName            String
+  cpf                 String
+  pisPasep            String?
+  esocialRegistration String?
+  esocialCategory     String?
+  laborRegime         LaborRegime          @default(CLT)
+  department          String?
+  costCenter          String?
+  taxMunicipalityCode String?
+  hireDate            DateTime?
+  terminationDate     DateTime?
+  status              FiscalRegisterStatus @default(ACTIVE)
+  metadata            Json?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  branch      Branch?              @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  taxProfiles EmployeeTaxProfile[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, cpf])
+  @@index([tenantId, companyId, branchId])
+  @@index([tenantId, status])
+}
+
+model EmployeeTaxProfile {
+  id                  String    @id @default(uuid())
+  tenantId            String
+  employeeId          String
+  inssCategory        String?
+  fgtsCategory        String?
+  irrfCategory        String?
+  unionContribution   Boolean   @default(false)
+  ratRate             Decimal   @default(0) @db.Decimal(18, 6)
+  fapRate             Decimal   @default(0) @db.Decimal(18, 6)
+  payrollTaxGroupId   String?
+  esocialEventMapping Json?
+  laborObligations    Json?
+  validFrom           DateTime  @default(now())
+  validTo             DateTime?
+  metadata            Json?
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  employee        Employee  @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  payrollTaxGroup TaxGroup? @relation("PayrollTaxGroup", fields: [payrollTaxGroupId], references: [id], onDelete: Restrict)
+
+  @@unique([employeeId, validFrom])
+  @@index([tenantId, employeeId, validFrom, validTo])
+  @@index([tenantId, payrollTaxGroupId])
+}
+
+model AgriculturalItemProfile {
+  id                       String            @id @default(uuid())
+  tenantId                 String
+  itemId                   String            @unique
+  productCategory          String
+  agriculturalGroup        String?
+  variety                  String?
+  producerPartyId          String?
+  originRegion             String?
+  harvestInfo              Json?
+  seasonality              Json?
+  defaultShelfLifeDays     Int?
+  weightControlType        WeightControlType @default(VARIABLE_WEIGHT)
+  packagingTareWeightKg    Decimal           @default(0) @db.Decimal(18, 4)
+  grossWeightRequired      Boolean           @default(true)
+  scaleIntegrationCode     String?
+  lotControlRequired       Boolean           @default(true)
+  fefoRequired             Boolean           @default(true)
+  freshnessClass           String?
+  defaultQualityGrade      String?
+  defaultPackageTypeId     String?
+  saleCfopDefault          String?
+  purchaseCfopDefault      String?
+  agriculturalBenefitCode  String?
+  agriculturalExemption    Boolean           @default(false)
+  ruralProducerTaxScenario String?
+  funruralApplicable       Boolean           @default(false)
+  ibsCategory              String?
+  cbsCategory              String?
+  effectiveFrom            DateTime          @default(now())
+  effectiveTo              DateTime?
+  metadata                 Json?
+  createdAt                DateTime          @default(now())
+  updatedAt                DateTime          @updatedAt
+
+  tenant             Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item               Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  producer           Party?         @relation("AgriculturalProducer", fields: [producerPartyId], references: [id], onDelete: Restrict)
+  defaultPackageType PackagingType? @relation("DefaultProducePackage", fields: [defaultPackageTypeId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, productCategory, agriculturalGroup])
+  @@index([tenantId, producerPartyId])
+  @@index([tenantId, weightControlType, lotControlRequired, fefoRequired])
+  @@index([tenantId, effectiveFrom, effectiveTo])
+}
+
+model PackagingType {
+  id            String   @id @default(uuid())
+  tenantId      String
+  code          String
+  name          String
+  kind          String
+  tareWeightKg  Decimal  @default(0) @db.Decimal(18, 4)
+  capacityKg    Decimal? @db.Decimal(18, 4)
+  isReturnable  Boolean  @default(false)
+  depositAmount Decimal  @default(0) @db.Decimal(18, 2)
+  isActive      Boolean  @default(true)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  tenant              Tenant                    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  defaultItemProfiles AgriculturalItemProfile[] @relation("DefaultProducePackage")
+  lots                InventoryLot[]
+  salesLines          SalesOrderLine[]
+  purchaseLines       PurchaseOrderLine[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, kind, isActive])
+}
+
+model Warehouse {
+  id        String   @id @default(uuid())
+  tenantId  String
+  code      String
+  name      String
+  branchId  String?
+  isActive  Boolean  @default(true)
+  metadata  Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  branch            Branch?           @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  zones             WarehouseZone[]
+  lots              InventoryLot[]
+  itemLedgerEntries ItemLedgerEntry[]
+
+  @@unique([tenantId, code])
+  @@index([tenantId, branchId, isActive])
+}
+
+model WarehouseZone {
+  id              String            @id @default(uuid())
+  tenantId        String
+  warehouseId     String
+  code            String
+  name            String
+  type            WarehouseZoneType @default(AMBIENT)
+  minTemperatureC Decimal?          @db.Decimal(6, 2)
+  maxTemperatureC Decimal?          @db.Decimal(6, 2)
+  isActive        Boolean           @default(true)
+  metadata        Json?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  warehouse         Warehouse         @relation(fields: [warehouseId], references: [id], onDelete: Cascade)
+  lots              InventoryLot[]
+  itemLedgerEntries ItemLedgerEntry[]
+
+  @@unique([tenantId, warehouseId, code])
+  @@index([tenantId, type, isActive])
+}
+
+model InventoryLot {
+  id                String           @id @default(uuid())
+  tenantId          String
+  itemId            String
+  lotNumber         String
+  warehouseId       String?
+  zoneId            String?
+  producerPartyId   String?
+  packageTypeId     String?
+  packageCount      Decimal          @default(0) @db.Decimal(18, 4)
+  initialQuantityKg Decimal          @default(0) @db.Decimal(18, 4)
+  quantityOnHandKg  Decimal          @default(0) @db.Decimal(18, 4)
+  harvestDate       DateTime?
+  receivedDate      DateTime         @default(now())
+  expirationDate    DateTime?
+  shelfLifeDays     Int?
+  qualityGrade      String?
+  freshnessClass    String?
+  originRegion      String?
+  status            ProduceLotStatus @default(AVAILABLE)
+  metadata          Json?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  tenant             Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item               Item                  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  warehouse          Warehouse?            @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
+  zone               WarehouseZone?        @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  producer           Party?                @relation("LotProducer", fields: [producerPartyId], references: [id], onDelete: Restrict)
+  packageType        PackagingType?        @relation(fields: [packageTypeId], references: [id], onDelete: Restrict)
+  qualityInspections QualityInspection[]
+  lossEvents         InventoryLossEvent[]
+  itemLedgerEntries  ItemLedgerEntry[]
+  valueEntries       InventoryValueEntry[]
+  salesLines         SalesOrderLine[]
+  purchaseLines      PurchaseOrderLine[]
+
+  @@unique([tenantId, itemId, lotNumber])
+  @@index([tenantId, itemId, status, expirationDate])
+  @@index([tenantId, warehouseId, zoneId, status])
+  @@index([tenantId, producerPartyId, receivedDate])
+}
+
+model QualityInspection {
+  id                 String                  @id @default(uuid())
+  tenantId           String
+  itemId             String
+  lotId              String?
+  purchaseOrderId    String?
+  inspectorUserId    String?
+  inspectionDate     DateTime                @default(now())
+  status             QualityInspectionStatus @default(PENDING)
+  grade              String?
+  freshnessClass     String?
+  temperatureC       Decimal?                @db.Decimal(6, 2)
+  brix               Decimal?                @db.Decimal(6, 2)
+  defects            Json?
+  acceptedQuantityKg Decimal                 @default(0) @db.Decimal(18, 4)
+  rejectedQuantityKg Decimal                 @default(0) @db.Decimal(18, 4)
+  notes              String?
+  createdAt          DateTime                @default(now())
+  updatedAt          DateTime                @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item          Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lot           InventoryLot?  @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  inspector     User?          @relation("QualityInspector", fields: [inspectorUserId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, itemId, inspectionDate])
+  @@index([tenantId, lotId, status])
+  @@index([tenantId, purchaseOrderId])
+}
+
+model InventoryLossEvent {
+  id           String              @id @default(uuid())
+  tenantId     String
+  itemId       String
+  lotId        String?
+  reason       InventoryLossReason
+  quantityKg   Decimal             @db.Decimal(18, 4)
+  costImpact   Decimal             @default(0) @db.Decimal(18, 2)
+  postingDate  DateTime            @default(now())
+  documentType String?
+  documentId   String?
+  notes        String?
+  createdById  String?
+  createdAt    DateTime            @default(now())
+
+  tenant    Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item      Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lot       InventoryLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  createdBy User?         @relation("InventoryLossCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, itemId, postingDate])
+  @@index([tenantId, lotId, reason])
+}
+
+model InventoryValueEntry {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  itemId             String
+  lotId              String?
+  entryType          String
+  quantity           Decimal  @db.Decimal(18, 4)
+  costAmount         Decimal  @db.Decimal(18, 2)
+  expectedCostAmount Decimal  @default(0) @db.Decimal(18, 2)
+  documentType       String?
+  documentId         String?
+  postingDate        DateTime @default(now())
+  createdAt          DateTime @default(now())
+
+  tenant            Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item              Item              @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  lot               InventoryLot?     @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  itemLedgerEntries ItemLedgerEntry[]
+
+  @@index([tenantId, itemId, postingDate])
+  @@index([tenantId, lotId, postingDate])
+  @@index([tenantId, documentType, documentId])
+}
+
+model LandedCostAllocation {
+  id              String                    @id @default(uuid())
+  tenantId        String
+  purchaseOrderId String?
+  basis           LandedCostAllocationBasis @default(WEIGHT)
+  freightAmount   Decimal                   @default(0) @db.Decimal(18, 2)
+  handlingAmount  Decimal                   @default(0) @db.Decimal(18, 2)
+  otherAmount     Decimal                   @default(0) @db.Decimal(18, 2)
+  totalWeightKg   Decimal                   @default(0) @db.Decimal(18, 4)
+  allocationTrace Json?
+  status          String                    @default("DRAFT")
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+
+  tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, purchaseOrderId, status])
+}
+
+model DeliveryRoute {
+  id              String              @id @default(uuid())
+  tenantId        String
+  code            String
+  name            String
+  status          DeliveryRouteStatus @default(PLANNED)
+  scheduledDate   DateTime?
+  vehicleId       String?
+  driverName      String?
+  freightCost     Decimal             @default(0) @db.Decimal(18, 2)
+  customerWindows Json?
+  stops           Json?
+  metadata        Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, code])
+  @@index([tenantId, status, scheduledDate])
+}
+
+model FiscalDocument {
+  id                   String                            @id @default(uuid())
+  tenantId             String
+  companyId            String
+  partyId              String
+  operationTypeId      String?
+  kind                 FiscalDocumentKind
+  direction            FiscalDocumentDirection
+  status               FiscalDocumentAuthorizationStatus @default(DRAFT)
+  sourceDocumentType   String?
+  sourceDocumentId     String?
+  number               String?
+  series               String?
+  fiscalDocumentKey    String?
+  accessKey            String?
+  protocolNumber       String?
+  issueDate            DateTime                          @default(now())
+  postingDate          DateTime?
+  totalProducts        Decimal                           @default(0) @db.Decimal(18, 2)
+  totalServices        Decimal                           @default(0) @db.Decimal(18, 2)
+  totalTax             Decimal                           @default(0) @db.Decimal(18, 2)
+  totalWithheld        Decimal                           @default(0) @db.Decimal(18, 2)
+  totalDocument        Decimal                           @default(0) @db.Decimal(18, 2)
+  xmlStorageKey        String?
+  authorizationMessage String?
+  rejectionCode        String?
+  rejectionReason      String?
+  contingencyMode      String?
+  metadata             Json?
+  createdAt            DateTime                          @default(now())
+  updatedAt            DateTime                          @updatedAt
+
+  tenant          Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company         Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  party           Party                @relation(fields: [partyId], references: [id], onDelete: Restrict)
+  operationType   FiscalOperationType? @relation(fields: [operationTypeId], references: [id], onDelete: Restrict)
+  lines           FiscalDocumentLine[]
+  postingJournals PostingJournal[]
+
+  @@unique([tenantId, kind, series, number])
+  @@index([tenantId, companyId, issueDate])
+  @@index([tenantId, partyId, issueDate])
+  @@index([tenantId, status, issueDate])
+  @@index([tenantId, sourceDocumentType, sourceDocumentId])
+}
+
+model FiscalDocumentLine {
+  id               String   @id @default(uuid())
+  tenantId         String
+  fiscalDocumentId String
+  itemId           String?
+  lineNumber       Int
+  description      String
+  quantity         Decimal  @default(1) @db.Decimal(18, 4)
+  unitAmount       Decimal  @default(0) @db.Decimal(18, 4)
+  lineAmount       Decimal  @default(0) @db.Decimal(18, 2)
+  freightAmount    Decimal  @default(0) @db.Decimal(18, 2)
+  discountAmount   Decimal  @default(0) @db.Decimal(18, 2)
+  cfop             String?
+  ncm              String?
+  cest             String?
+  cstIcms          String?
+  cstPisCofins     String?
+  serviceCode      String?
+  metadata         Json?
+  createdAt        DateTime @default(now())
+
+  tenant         Tenant                  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fiscalDocument FiscalDocument          @relation(fields: [fiscalDocumentId], references: [id], onDelete: Cascade)
+  item           Item?                   @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  taxes          FiscalDocumentLineTax[]
+
+  @@unique([fiscalDocumentId, lineNumber])
+  @@index([tenantId, fiscalDocumentId])
+  @@index([tenantId, itemId])
+}
+
+model FiscalDocumentLineTax {
+  id                     String           @id @default(uuid())
+  tenantId               String
+  fiscalDocumentLineId   String
+  taxKind                BrazilianTaxKind
+  taxDeterminationRuleId String?
+  jurisdictionId         String?
+  baseAmount             Decimal          @default(0) @db.Decimal(18, 2)
+  baseReductionAmount    Decimal          @default(0) @db.Decimal(18, 2)
+  rate                   Decimal          @default(0) @db.Decimal(18, 6)
+  amount                 Decimal          @default(0) @db.Decimal(18, 2)
+  recoverableAmount      Decimal          @default(0) @db.Decimal(18, 2)
+  withheldAmount         Decimal          @default(0) @db.Decimal(18, 2)
+  calculationTrace       Json?
+  createdAt              DateTime         @default(now())
+
+  tenant               Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  fiscalDocumentLine   FiscalDocumentLine    @relation(fields: [fiscalDocumentLineId], references: [id], onDelete: Cascade)
+  taxDeterminationRule TaxDeterminationRule? @relation(fields: [taxDeterminationRuleId], references: [id], onDelete: Restrict)
+  jurisdiction         FiscalJurisdiction?   @relation(fields: [jurisdictionId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, taxKind, createdAt])
+  @@index([tenantId, fiscalDocumentLineId])
+}
+
+model PostingJournal {
+  id               String               @id @default(uuid())
+  tenantId         String
+  companyId        String
+  fiscalDocumentId String?
+  sourceType       String
+  sourceId         String
+  status           PostingJournalStatus @default(DRAFT)
+  postingDate      DateTime
+  description      String?
+  totalDebit       Decimal              @default(0) @db.Decimal(18, 2)
+  totalCredit      Decimal              @default(0) @db.Decimal(18, 2)
+  validationErrors Json?
+  previewPayload   Json?
+  postedAt         DateTime?
+  postedById       String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+
+  tenant         Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company        Company              @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  fiscalDocument FiscalDocument?      @relation(fields: [fiscalDocumentId], references: [id], onDelete: SetNull)
+  lines          PostingJournalLine[]
+
+  @@index([tenantId, companyId, postingDate])
+  @@index([tenantId, sourceType, sourceId])
+  @@index([tenantId, status, postingDate])
+}
+
+model PostingJournalLine {
+  id               String     @id @default(uuid())
+  tenantId         String
+  postingJournalId String
+  lineNumber       Int
+  ledger           String
+  accountNo        String?
+  side             LedgerSide
+  amount           Decimal    @db.Decimal(18, 2)
+  currencyCode     String     @default("BRL")
+  description      String?
+  dimensions       Json?
+  sourceType       String?
+  sourceId         String?
+  createdAt        DateTime   @default(now())
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  postingJournal PostingJournal @relation(fields: [postingJournalId], references: [id], onDelete: Cascade)
+
+  @@unique([postingJournalId, lineNumber])
+  @@index([tenantId, ledger, createdAt])
+}
+
+model PostingSetup {
+  id                 String    @id @default(uuid())
+  tenantId           String
+  businessTaxGroupId String?
+  productTaxGroupId  String?
+  receivableAccount  String?
+  payableAccount     String?
+  revenueAccount     String?
+  expenseAccount     String?
+  inventoryAccount   String?
+  cogsAccount        String?
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  isActive           Boolean   @default(true)
+  metadata           Json?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  businessTaxGroup TaxGroup? @relation("PostingSetupBusinessGroup", fields: [businessTaxGroupId], references: [id], onDelete: Restrict)
+  productTaxGroup  TaxGroup? @relation("PostingSetupProductGroup", fields: [productTaxGroupId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, businessTaxGroupId, productTaxGroupId, effectiveFrom])
+}
+
+model TaxPostingSetup {
+  id                 String           @id @default(uuid())
+  tenantId           String
+  taxKind            BrazilianTaxKind
+  payableAccount     String?
+  recoverableAccount String?
+  expenseAccount     String?
+  settlementAccount  String?
+  effectiveFrom      DateTime
+  effectiveTo        DateTime?
+  isActive           Boolean          @default(true)
+  metadata           Json?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, taxKind, effectiveFrom])
+  @@index([tenantId, taxKind, isActive])
+}
+
+model FiscalPostingSetup {
+  id                   String              @id @default(uuid())
+  tenantId             String
+  operationTypeId      String?
+  documentKind         FiscalDocumentKind?
+  fiscalLedgerTemplate Json?
+  requiresTaxLedger    Boolean             @default(true)
+  requiresGlPosting    Boolean             @default(true)
+  effectiveFrom        DateTime
+  effectiveTo          DateTime?
+  isActive             Boolean             @default(true)
+  metadata             Json?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  operationType FiscalOperationType? @relation(fields: [operationTypeId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, operationTypeId, documentKind, effectiveFrom])
+}
+
+model CustomerLedgerEntry {
+  id           String     @id @default(uuid())
+  tenantId     String
+  companyId    String
+  customerId   String
+  postingDate  DateTime
+  documentType String?
+  documentId   String?
+  side         LedgerSide
+  amount       Decimal    @db.Decimal(18, 2)
+  openAmount   Decimal    @db.Decimal(18, 2)
+  dueDate      DateTime?
+  isOpen       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  customer Party   @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, customerId, postingDate])
+  @@index([tenantId, companyId, isOpen, dueDate])
+}
+
+model SupplierLedgerEntry {
+  id           String     @id @default(uuid())
+  tenantId     String
+  companyId    String
+  supplierId   String
+  postingDate  DateTime
+  documentType String?
+  documentId   String?
+  side         LedgerSide
+  amount       Decimal    @db.Decimal(18, 2)
+  openAmount   Decimal    @db.Decimal(18, 2)
+  dueDate      DateTime?
+  isOpen       Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+
+  tenant   Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company  Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  supplier Party   @relation(fields: [supplierId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, supplierId, postingDate])
+  @@index([tenantId, companyId, isOpen, dueDate])
+}
+
+model BankLedgerEntry {
+  id              String     @id @default(uuid())
+  tenantId        String
+  companyId       String
+  bankAccountCode String
+  postingDate     DateTime
+  documentType    String?
+  documentId      String?
+  side            LedgerSide
+  amount          Decimal    @db.Decimal(18, 2)
+  reconciledAt    DateTime?
+  createdAt       DateTime   @default(now())
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, companyId, bankAccountCode, postingDate])
+}
+
+model TaxLedgerEntry {
+  id                      String           @id @default(uuid())
+  tenantId                String
+  companyId               String
+  taxKind                 BrazilianTaxKind
+  jurisdictionId          String?
+  postingDate             DateTime
+  documentType            String?
+  documentId              String?
+  fiscalDocumentLineTaxId String?
+  side                    LedgerSide
+  baseAmount              Decimal          @default(0) @db.Decimal(18, 2)
+  rate                    Decimal          @default(0) @db.Decimal(18, 6)
+  amount                  Decimal          @db.Decimal(18, 2)
+  recoverableAmount       Decimal          @default(0) @db.Decimal(18, 2)
+  withheldAmount          Decimal          @default(0) @db.Decimal(18, 2)
+  isSettled               Boolean          @default(false)
+  settlementId            String?
+  createdAt               DateTime         @default(now())
+
+  tenant       Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company      Company             @relation(fields: [companyId], references: [id], onDelete: Restrict)
+  jurisdiction FiscalJurisdiction? @relation(fields: [jurisdictionId], references: [id], onDelete: Restrict)
+
+  @@index([tenantId, companyId, taxKind, postingDate])
+  @@index([tenantId, isSettled, taxKind])
+  @@index([tenantId, documentType, documentId])
+}
+
+model TaxSettlementLedgerEntry {
+  id            String           @id @default(uuid())
+  tenantId      String
+  companyId     String
+  taxKind       BrazilianTaxKind
+  periodStart   DateTime
+  periodEnd     DateTime
+  debitAmount   Decimal          @default(0) @db.Decimal(18, 2)
+  creditAmount  Decimal          @default(0) @db.Decimal(18, 2)
+  payableAmount Decimal          @default(0) @db.Decimal(18, 2)
+  status        String           @default("OPEN")
+  createdAt     DateTime         @default(now())
+  postedAt      DateTime?
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, companyId, taxKind, periodStart, periodEnd])
+  @@index([tenantId, companyId, status])
+}
+
+// --- Open Finance Brasil (banking aggregation) ---
+
+enum BankConnectionStatus {
+  PENDING_CONSENT
+  ACTIVE
+  SUSPENDED
+  ERROR
+  REVOKED
+}
+
+enum BankConsentStatus {
+  AWAITING_AUTHORISATION
+  AUTHORISED
+  REJECTED
+  EXPIRED
+  REVOKED
+}
+
+enum BankAccountType {
+  CHECKING
+  SAVINGS
+  PREPAID
+  PAYMENT
+  OTHER
+}
+
+enum BankTransactionType {
+  CREDIT
+  DEBIT
+  PIX
+  TED
+  DOC
+  BOLETO
+  CARD
+  FEE
+  TRANSFER
+  OTHER
+}
+
+enum BankSyncJobType {
+  ACCOUNTS
+  BALANCES
+  TRANSACTIONS_HISTORICAL
+  TRANSACTIONS_INCREMENTAL
+  CONSENT_CHECK
+}
+
+enum BankSyncJobStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
+
+enum ReconciliationMatchStatus {
+  SUGGESTED
+  CONFIRMED
+  REJECTED
+  POSTED
+}
+
+enum BankingAccessAction {
+  READ_ACCOUNTS
+  READ_TRANSACTIONS
+  START_CONSENT
+  REVOKE_CONSENT
+  SYNC
+  RECONCILE
+}
+
+model FinancialInstitution {
+  id              String   @id @default(uuid())
+  tenantId        String?
+  participantId   String
+  ispb            String
+  compe           String?
+  brandName       String
+  apiBaseUrl      String?
+  supportedScopes Json?
+  isSandbox       Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant      Tenant?          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connections BankConnection[]
+
+  @@unique([participantId])
+  @@index([tenantId, ispb])
+}
+
+model BankConnection {
+  id            String               @id @default(uuid())
+  tenantId      String
+  companyId     String
+  institutionId String
+  status        BankConnectionStatus @default(PENDING_CONSENT)
+  syncEnabled   Boolean              @default(true)
+  lastSyncAt    DateTime?
+  lastError     String?
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+
+  tenant      Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company     Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  institution FinancialInstitution @relation(fields: [institutionId], references: [id], onDelete: Restrict)
+  consents    BankConsent[]
+  accounts    BankAccount[]
+  syncJobs    BankSyncJob[]
+
+  @@unique([tenantId, companyId, institutionId])
+  @@index([tenantId, companyId, status])
+}
+
+model BankConsent {
+  id             String            @id @default(uuid())
+  tenantId       String
+  companyId      String
+  connectionId   String
+  authorizedById String?
+  externalId     String?
+  status         BankConsentStatus @default(AWAITING_AUTHORISATION)
+  scopes         Json?
+  expiresAt      DateTime?
+  authorisedAt   DateTime?
+  revokedAt      DateTime?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  tenant       Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company      Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  connection   BankConnection       @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  authorizer   User?                @relation("BankConsentAuthorizer", fields: [authorizedById], references: [id], onDelete: SetNull)
+  oauthSession BankOAuthSession?
+  credential   BankCredentialVault?
+  syncJobs     BankSyncJob[]
+
+  @@index([tenantId, companyId, status])
+  @@index([connectionId])
+}
+
+model BankOAuthSession {
+  id           String    @id @default(uuid())
+  tenantId     String
+  consentId    String    @unique
+  state        String    @unique
+  codeVerifier String
+  redirectUri  String
+  expiresAt    DateTime
+  consumedAt   DateTime?
+  createdAt    DateTime  @default(now())
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  consent BankConsent @relation(fields: [consentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, expiresAt])
+}
+
+model BankCredentialVault {
+  id            String    @id @default(uuid())
+  tenantId      String
+  consentId     String    @unique
+  keyVersion    Int       @default(1)
+  accessCipher  String
+  accessIv      String
+  refreshCipher String?
+  refreshIv     String?
+  expiresAt     DateTime?
+  rotatedAt     DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  consent BankConsent @relation(fields: [consentId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, consentId])
+}
+
+model BankAccount {
+  id            String          @id @default(uuid())
+  tenantId      String
+  companyId     String
+  connectionId  String
+  branchId      String?
+  externalId    String
+  accountType   BankAccountType @default(CHECKING)
+  branchNumber  String?
+  accountNumber String
+  checkDigit    String?
+  currency      String          @default("BRL")
+  displayName   String?
+  isActive      Boolean         @default(true)
+  lastSyncAt    DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  tenant       Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  connection   BankConnection    @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  balances     BankBalance[]
+  transactions BankTransaction[]
+
+  @@unique([tenantId, connectionId, externalId])
+  @@index([tenantId, companyId])
+}
+
+model BankBalance {
+  id        String   @id @default(uuid())
+  tenantId  String
+  companyId String
+  accountId String
+  amount    Decimal  @db.Decimal(18, 2)
+  asOf      DateTime
+  createdAt DateTime @default(now())
+
+  tenant  Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account BankAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, accountId, asOf])
+}
+
+model BankTransaction {
+  id              String              @id @default(uuid())
+  tenantId        String
+  companyId       String
+  accountId       String
+  externalId      String
+  transactionType BankTransactionType @default(OTHER)
+  amount          Decimal             @db.Decimal(18, 2)
+  bookedAt        DateTime
+  description     String?
+  documentNumber  String?
+  rawPayload      Json?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  tenant    Tenant                @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company   Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  account   BankAccount           @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  pixDetail PixTransactionDetail?
+  matches   ReconciliationMatch[]
+
+  @@unique([tenantId, accountId, externalId])
+  @@index([tenantId, companyId, bookedAt])
+  @@index([tenantId, accountId, transactionType])
+}
+
+model PixTransactionDetail {
+  id               String   @id @default(uuid())
+  transactionId    String   @unique
+  endToEndId       String?
+  pixKey           String?
+  counterpartyName String?
+  counterpartyDoc  String?
+  createdAt        DateTime @default(now())
+
+  transaction BankTransaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  @@index([endToEndId])
+}
+
+model BankSyncJob {
+  id           String            @id @default(uuid())
+  tenantId     String
+  connectionId String
+  consentId    String?
+  jobType      BankSyncJobType
+  status       BankSyncJobStatus @default(PENDING)
+  cursor       String?
+  errorMessage String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime          @default(now())
+
+  tenant     Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  connection BankConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  consent    BankConsent?   @relation(fields: [consentId], references: [id], onDelete: SetNull)
+
+  @@index([tenantId, connectionId, status])
+}
+
+model BankWebhookInbox {
+  id          String    @id @default(uuid())
+  tenantId    String?
+  eventId     String
+  eventType   String
+  payload     Json
+  processedAt DateTime?
+  createdAt   DateTime  @default(now())
+
+  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  @@unique([eventId])
+  @@index([tenantId, processedAt])
+}
+
+model ReconciliationRule {
+  id              String   @id @default(uuid())
+  tenantId        String
+  companyId       String
+  name            String
+  amountTolerance Decimal  @default(0.01) @db.Decimal(18, 4)
+  dayTolerance    Int      @default(3)
+  matchers        Json
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant  Tenant  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, companyId, isActive])
+}
+
+model ReconciliationMatch {
+  id                String                    @id @default(uuid())
+  tenantId          String
+  companyId         String
+  bankTransactionId String
+  targetType        String
+  targetId          String?
+  status            ReconciliationMatchStatus @default(SUGGESTED)
+  confidence        Decimal                   @db.Decimal(5, 4)
+  matchedById       String?
+  postedAt          DateTime?
+  createdAt         DateTime                  @default(now())
+  updatedAt         DateTime                  @updatedAt
+
+  tenant          Tenant          @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  company         Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  bankTransaction BankTransaction @relation(fields: [bankTransactionId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, companyId, status])
+  @@index([bankTransactionId])
+}
+
+model BankingAccessLog {
+  id        String              @id @default(uuid())
+  tenantId  String
+  companyId String?
+  userId    String
+  action    BankingAccessAction
+  resource  String?
+  ip        String?
+  metadata  Json?
+  createdAt DateTime            @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, userId, createdAt])
+}

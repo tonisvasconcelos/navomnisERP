@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Dependency audit (critical only)
+        run: pnpm audit --audit-level=critical
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - name: Prisma validate
+        working-directory: apps/api
+        run: pnpm exec prisma validate
+      - name: Prisma format check
+        working-directory: apps/api
+        run: pnpm exec prisma format --check
+      - run: pnpm build
+
+  integration:
+    runs-on: ubuntu-latest
+    needs: quality
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      PROCESS_ROLE: api
+      DATABASE_URL: postgresql://navomnis:navomnis@127.0.0.1:5432/navomnis_test?schema=public
+      TEST_DATABASE_URL: postgresql://navomnis:navomnis@127.0.0.1:5432/navomnis_test?schema=public
+      REDIS_URL: redis://127.0.0.1:6379
+      JWT_ACCESS_SECRET: ci-access-secret-change-me-32chars!!
+      JWT_REFRESH_SECRET: ci-refresh-secret-change-me-32chars!!
+      WEB_URL: http://127.0.0.1:4173
+      API_PORT: '4010'
+      VITE_API_URL: http://127.0.0.1:4010/api/v1
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: navomnis
+          POSTGRES_PASSWORD: navomnis
+          POSTGRES_DB: navomnis_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U navomnis -d navomnis_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prisma migrate + seed
+        working-directory: apps/api
+        run: |
+          pnpm exec prisma migrate deploy
+          pnpm exec prisma db seed
+      - name: API integration tests
+        working-directory: apps/api
+        shell: bash
+        run: |
+          set -o pipefail
+          pnpm run test:integration 2>&1 | tee integration.log
+      - name: Upload API integration log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-integration-log
+          path: apps/api/integration.log
+      - name: Build API
+        run: pnpm --filter @navomnis/api build
+      - name: Start API (background)
+        working-directory: apps/api
+        run: |
+          node dist/main.js &
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:4010/api/v1/health" >/dev/null; then
+              echo "API ready"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "API failed to start"
+          exit 1
+      - name: Build web (E2E API URL)
+        env:
+          VITE_API_URL: http://127.0.0.1:4010/api/v1
+        run: pnpm --filter @navomnis/web build
+      - name: Install Playwright
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Playwright (V1 cenário)
+        working-directory: apps/web
+        env:
+          CI: 'true'
+        run: pnpm exec playwright test -c playwright.config.cjs
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report

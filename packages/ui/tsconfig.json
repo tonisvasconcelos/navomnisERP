@@ -1,0 +1,10 @@
+{
+  "extends": "@navomnis/config/typescript/react.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@navomnis/ui/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

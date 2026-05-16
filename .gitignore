@@ -1,0 +1,26 @@
+.cursor
+node_modules
+
+dist
+build
+.next
+.turbo
+*.log
+.env
+.env.local
+.env.*.local
+coverage
+.DS_Store
+*.tsbuildinfo
+.prisma
+apps/api/generated
+apps/api/dist
+# Local Vercel link metadata; use VERCEL_ORG_ID / VERCEL_PROJECT_ID in CI or re-run `vercel link`.
+apps/web/.vercel
+apps/web/dist
+apps/web/playwright-report
+apps/web/test-results
+apps/mobile/dist
+.idea
+.vscode/*
+!.vscode/extensions.json

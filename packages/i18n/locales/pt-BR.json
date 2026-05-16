@@ -1,0 +1,21 @@
+{
+  "common": {
+    "appName": "Navomnis ERP",
+    "loading": "Carregando…",
+    "save": "Salvar",
+    "cancel": "Cancelar",
+    "search": "Buscar"
+  },
+  "auth": {
+    "login": "Entrar",
+    "email": "E-mail",
+    "password": "Senha",
+    "logout": "Sair",
+    "sessionExpired": "Sua sessão expirou. Entre novamente."
+  },
+  "errors": {
+    "generic": "Ocorreu um erro. Tente novamente.",
+    "unauthorized": "Não autorizado.",
+    "forbidden": "Acesso negado."
+  }
+}
