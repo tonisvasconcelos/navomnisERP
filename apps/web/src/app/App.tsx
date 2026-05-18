@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '../widgets/app-shell';
 import { LoginPage } from '../features/auth/pages/login-page';
+import { InviteAcceptPage } from '../features/auth/pages/invite-accept-page';
 import { useAuthStore } from '../features/auth/auth-store';
 
 const DashboardPage = lazy(() =>
@@ -58,6 +59,7 @@ export default function App() {
     <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/login" element={accessToken ? <Navigate to="/" replace /> : <LoginPage />} />
+        <Route path="/invite/accept" element={<InviteAcceptPage />} />
         <Route
           path="/"
           element={accessToken ? <AppShell /> : <Navigate to="/login" replace />}

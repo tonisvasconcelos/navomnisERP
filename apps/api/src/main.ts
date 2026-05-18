@@ -13,7 +13,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
 
 function corsOrigin(): boolean | string[] {
   const isProd = process.env.NODE_ENV === 'production';
-  const raw = process.env.WEB_URL ?? '';
+  const raw = [process.env.WEB_URL ?? '', process.env.ADMIN_WEB_URL ?? ''].join(',');
   const origins = raw
     .split(',')
     .map((o) => o.trim())
@@ -103,7 +103,7 @@ async function bootstrap() {
     SwaggerModule.setup('api/docs', app, document);
   }
 
-  const port = Number(process.env.API_PORT ?? 4000);
+  const port = Number(process.env.PORT ?? process.env.API_PORT ?? 4000);
   await app.listen(port);
 }
 

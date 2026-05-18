@@ -42,7 +42,10 @@ jobs:
       REDIS_URL: redis://127.0.0.1:6379
       JWT_ACCESS_SECRET: ci-access-secret-change-me-32chars!!
       JWT_REFRESH_SECRET: ci-refresh-secret-change-me-32chars!!
+      PLATFORM_JWT_ACCESS_SECRET: ci-platform-access-secret-change-32!!
+      PLATFORM_JWT_REFRESH_SECRET: ci-platform-refresh-secret-change-32!!
       WEB_URL: http://127.0.0.1:4173
+      ADMIN_WEB_URL: http://127.0.0.1:5174
       API_PORT: '4010'
       VITE_API_URL: http://127.0.0.1:4010/api/v1
     services:

@@ -1,4 +1,8 @@
 {
+  "installCommand": "cd ../.. && corepack enable && pnpm install --frozen-lockfile --filter @navomnis/web...",
+  "buildCommand": "cd ../.. && pnpm --filter @navomnis/web run build",
+  "outputDirectory": "dist",
+  "framework": "vite",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }],
   "headers": [
     {

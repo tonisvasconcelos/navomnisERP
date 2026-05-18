@@ -13,8 +13,10 @@ Ambiente de **staging** espelha produção o suficiente para validar migrações
 | `DATABASE_URL` | Postgres dedicado a staging (não partilhar credenciais com prod). |
 | `REDIS_URL` | Instância Redis de staging. |
 | `NODE_ENV` | `production` em staging real para validar CORS, secrets e gates (ex.: Swagger). |
-| `WEB_URL` | Origem(s) do front de staging (CSV se várias), ex.: `https://staging.navomnis.example`. |
+| `WEB_URL` | Origem(s) do ERP tenant (CSV), ex.: `https://web-oss365.vercel.app`. Não usar `localhost` com `NODE_ENV=production`. |
+| `ADMIN_WEB_URL` | Origem(s) do platform admin (CSV), ex.: `https://navomnis-admin-oss365.vercel.app`. |
 | `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Mínimo 32 caracteres quando `NODE_ENV=production`. |
+| `PLATFORM_JWT_ACCESS_SECRET` / `PLATFORM_JWT_REFRESH_SECRET` | Distintos dos JWT tenant; ≥32 chars em produção. |
 | `JWT_ACCESS_EXPIRES` / `JWT_REFRESH_EXPIRES` | Alinhar com política de sessão acordada. |
 | `SWAGGER_ENABLED` | Manter `false` em staging público; se `true`, exigir também `SWAGGER_BASIC_USER` / `SWAGGER_BASIC_PASSWORD` (ver [security-ci.md](./security-ci.md)). |
 
@@ -24,10 +26,31 @@ Ambiente de **staging** espelha produção o suficiente para validar migrações
 2. Correr `pnpm --filter @navomnis/api exec prisma db seed` apenas onde fizer sentido (nunca em produção com dados reais sem controlo).
 3. Manter backups automáticos do Postgres de staging para rollback de schema.
 
-## Web (Vercel) + API (Railway)
+## Frontends (Vercel) + API (Railway)
 
-- Build do web com `VITE_API_URL` apontando para a URL pública da API de staging (`…/api/v1`).
-- Garantir que `WEB_URL` na API inclui o domínio do preview Vercel se se testar PR previews.
+Dois projetos Vercel (monorepo):
+
+| App | Root | Projeto | `VITE_API_URL` (staging) |
+|-----|------|---------|--------------------------|
+| Tenant ERP | `apps/web` | `web` (`prj_lB9fMjqKg7uj2CMaSh0slXuUR3XP`) | `https://api-staging-fa90.up.railway.app/api/v1` |
+| Platform admin | `apps/admin` | `navomnis-admin` (`prj_tCK7lc0TV4fHOMnK4tpfkSrQD4Ax`) | idem |
+
+- `apps/web/vercel.json` e `apps/admin/vercel.json`: install com `pnpm install --filter @navomnis/<app>...`
+- `engines.node`: `22.x` em cada `package.json`
+- Após deploy, atualizar `WEB_URL` / `ADMIN_WEB_URL` na Railway (CSV) e redeploy API se CORS falhar no browser.
+
+**API staging:** https://api-staging-fa90.up.railway.app/api/v1
+
+**Smoke platform:** [staging-platform-admin-smoke.md](./staging-platform-admin-smoke.md)
+
+**Registo de prova:** [staging-proof-log.md](./staging-proof-log.md)
+
+## Acesso ao UI (Vercel)
+
+Antes de testar no browser:
+
+1. **Deployment Protection** — em cada projeto (`web`, `navomnis-admin`): Settings → Deployment Protection → desligar **Vercel Authentication** em Production (e Preview se usar previews). Sem isto, assets devolvem **401** e a app não arranca.
+2. **Build com API** — `pnpm run build:staging-front` e deploy prebuilt; ver [vercel.md](./vercel.md#deploy-prebuilt-cli).
 
 ## E2E Playwright (local ou CI)
 

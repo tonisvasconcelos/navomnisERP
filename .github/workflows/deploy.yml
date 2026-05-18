@@ -116,3 +116,59 @@ jobs:
         run: |
           echo "Configure: railway redeploy --service <api_staging> --environment staging"
           echo "Prefer Railway Git integration on branch develop — see docs/git-workflow.md"
+
+  deploy-admin:
+    name: Vercel (platform admin)
+    runs-on: ubuntu-latest
+    if: >-
+      secrets.VERCEL_TOKEN != '' &&
+      secrets.VERCEL_ADMIN_PROJECT_ID != '' &&
+      (github.ref == 'refs/heads/main' ||
+        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+    environment:
+      name: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy admin to Vercel
+        working-directory: apps/admin
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy --prod --token "$VERCEL_TOKEN" --yes
+
+  deploy-admin-staging:
+    name: Vercel (admin staging)
+    runs-on: ubuntu-latest
+    if: >-
+      secrets.VERCEL_TOKEN != '' &&
+      secrets.VERCEL_ADMIN_PROJECT_ID != '' &&
+      (github.ref == 'refs/heads/develop' ||
+        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Deploy admin preview to Vercel
+        working-directory: apps/admin
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: npx vercel deploy --token "$VERCEL_TOKEN" --yes

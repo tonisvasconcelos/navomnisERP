@@ -35,6 +35,32 @@ Defina no painel Vercel (Production e Preview):
 - **Rewrites**: fallback para `index.html` (SPA); ficheiros estáticos existentes continuam a ser servidos primeiro.
 - **Headers**: `Cache-Control` para `index.html` / `sw.js`, `no-sniff`, `Referrer-Policy`, `Permissions-Policy`.
 
+## Deploy prebuilt (CLI)
+
+Vite grava `VITE_*` no **build**. Um `vercel deploy --prebuilt` **não** lê variáveis novas do painel — tem de correr `vite build` já com `VITE_API_URL` definido.
+
+```powershell
+# Na raiz (PowerShell)
+$env:VITE_API_URL = "https://api-staging-fa90.up.railway.app/api/v1"
+pnpm --filter @navomnis/web run build
+pnpm --filter @navomnis/admin run build
+
+# Web
+cd apps/web
+Remove-Item -Recurse -Force .vercel\output -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path .vercel\output\static | Out-Null
+Copy-Item -Recurse -Force dist\* .vercel\output\static\
+vercel deploy --prebuilt --prod --yes
+
+# Admin — o mesmo em apps/admin
+```
+
+Confirme no `dist/assets/*.js` que aparece o host da API (ex. `api-staging-fa90`).
+
+## Deployment Protection
+
+Para testes no browser, desative **Settings → Deployment Protection → Vercel Authentication** em `web` e `navomnis-admin` (Production e Preview), ou use **Shareable Links**.
+
 ## MCP da Vercel no Cursor
 
 Ver [mcp-vercel.md](./mcp-vercel.md).

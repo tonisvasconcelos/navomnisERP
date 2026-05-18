@@ -1,0 +1,8 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# Healthcheck only on the `api` service (set via Railway service config). Worker has no HTTP listener.
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10

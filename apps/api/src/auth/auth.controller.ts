@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Headers, HttpCode, Ip, Post, Query, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { Throttle } from '@nestjs/throttler';
 import type { Request } from 'express';
@@ -6,6 +6,7 @@ import { AuthService } from './auth.service';
 import { Public } from './decorators/public.decorator';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LoginDto } from './dto/login.dto';
+import { AcceptUserInviteDto } from './dto/accept-user-invite.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RefreshDto } from './dto/refresh.dto';
 import { TenantAccessGuard } from '../tenant/tenant-access.guard';
@@ -48,6 +49,22 @@ export class AuthController {
   @ApiOperation({ summary: 'Cadastro inicial (desabilitado em produção)' })
   register(@Body() dto: RegisterDto) {
     return this.auth.register(dto);
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 30, ttl: 60_000 } })
+  @Get('invite/validate')
+  @ApiOperation({ summary: 'Validar token de convite' })
+  validateInvite(@Query('token') token: string) {
+    return this.auth.validateInviteToken(token ?? '');
+  }
+
+  @Public()
+  @Throttle({ default: { limit: 10, ttl: 60_000 } })
+  @Post('invite/accept')
+  @ApiOperation({ summary: 'Aceitar convite e definir senha' })
+  acceptInvite(@Body() dto: AcceptUserInviteDto) {
+    return this.auth.acceptInvite(dto);
   }
 
   @Get('me')

@@ -2,6 +2,10 @@ import { BullModule } from '@nestjs/bullmq';
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_GUARD } from '@nestjs/core';
+import { PlatformModule } from './platform/platform.module';
+import { SubscriptionModule } from './subscription/subscription.module';
+import { SubscriptionStatusGuard } from './subscription/guards/subscription-status.guard';
+import { LegalAcceptanceGuard } from './subscription/guards/legal-acceptance.guard';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { LoggerModule } from 'nestjs-pino';
 import { configuration } from './config/configuration';
@@ -71,6 +75,8 @@ import { BankingModule } from './modules/banking/banking.module';
     LgpdModule,
     NotificationsModule.forApi(),
     BankingModule,
+    PlatformModule,
+    SubscriptionModule,
   ],
   providers: [
     {
@@ -80,6 +86,14 @@ import { BankingModule } from './modules/banking/banking.module';
     {
       provide: APP_GUARD,
       useClass: JwtAuthGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: SubscriptionStatusGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: LegalAcceptanceGuard,
     },
   ],
 })

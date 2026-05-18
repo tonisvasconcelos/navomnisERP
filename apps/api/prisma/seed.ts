@@ -2,6 +2,10 @@ import {
   BrazilianFiscalRegime,
   BrazilianTaxKind,
   ConsentKind,
+  LegalDocumentStatus,
+  QuotaResource,
+  SubscriptionPlanType,
+  TenantSubscriptionStatus,
   DocumentStatus,
   FiscalDocumentDirection,
   FiscalDocumentKind,
@@ -46,23 +50,27 @@ async function main() {
 
   await prisma.legalDocumentVersion.upsert({
     where: { id: '00000000-0000-4000-8000-000000000001' },
-    update: {},
+    update: { status: LegalDocumentStatus.PUBLISHED, publishedAt: new Date() },
     create: {
       id: '00000000-0000-4000-8000-000000000001',
       kind: ConsentKind.TERMS_OF_SERVICE,
       version: '2026-01-01',
       content: 'Termos de uso (demo). Substitua por texto jurídico válido.',
+      status: LegalDocumentStatus.PUBLISHED,
+      publishedAt: new Date(),
     },
   });
 
   await prisma.legalDocumentVersion.upsert({
     where: { id: '00000000-0000-4000-8000-000000000002' },
-    update: {},
+    update: { status: LegalDocumentStatus.PUBLISHED, publishedAt: new Date() },
     create: {
       id: '00000000-0000-4000-8000-000000000002',
       kind: ConsentKind.PRIVACY_POLICY,
       version: '2026-01-01',
       content: 'Política de privacidade LGPD (demo). Substitua por texto jurídico válido.',
+      status: LegalDocumentStatus.PUBLISHED,
+      publishedAt: new Date(),
     },
   });
 
@@ -347,7 +355,10 @@ async function main() {
         parameters: {
           seed: true,
           warning: 'Regra estrutural. Informar aliquotas e bases oficiais antes de operacao real.',
-          reformReady: [BrazilianTaxKind.IBS, BrazilianTaxKind.CBS, BrazilianTaxKind.IS].includes(taxKind),
+          reformReady:
+            taxKind === BrazilianTaxKind.IBS ||
+            taxKind === BrazilianTaxKind.CBS ||
+            taxKind === BrazilianTaxKind.IS,
           federalJurisdictionId: federal.id,
         },
       },
@@ -533,7 +544,130 @@ async function main() {
     });
   }
 
-  console.log('Seed concluído. Tenant demo / admin@demo.navomnis.local / Admin123!');
+  await prisma.consentRecord.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000090' },
+    update: {},
+    create: {
+      id: '00000000-0000-4000-8000-000000000090',
+      userId: user.id,
+      tenantId: tenant.id,
+      kind: ConsentKind.TERMS_OF_SERVICE,
+      version: '2026-01-01',
+      legalDocumentVersionId: '00000000-0000-4000-8000-000000000001',
+    },
+  });
+  await prisma.consentRecord.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000091' },
+    update: {},
+    create: {
+      id: '00000000-0000-4000-8000-000000000091',
+      userId: user.id,
+      tenantId: tenant.id,
+      kind: ConsentKind.PRIVACY_POLICY,
+      version: '2026-01-01',
+      legalDocumentVersionId: '00000000-0000-4000-8000-000000000002',
+    },
+  });
+
+  const platformPerms = [
+    { code: 'platform.tenants.read', name: 'Tenants — leitura' },
+    { code: 'platform.tenants.write', name: 'Tenants — escrita' },
+    { code: 'platform.tenants.lifecycle', name: 'Tenants — ciclo de vida' },
+    { code: 'platform.users.read', name: 'Usuários — leitura' },
+    { code: 'platform.users.write', name: 'Usuários — escrita' },
+    { code: 'platform.users.security', name: 'Usuários — segurança' },
+    { code: 'platform.subscriptions.read', name: 'Assinaturas — leitura' },
+    { code: 'platform.subscriptions.write', name: 'Assinaturas — escrita' },
+    { code: 'platform.telemetry.read', name: 'Telemetria — leitura' },
+    { code: 'platform.legal.read', name: 'Legal — leitura' },
+    { code: 'platform.legal.write', name: 'Legal — escrita' },
+    { code: 'platform.legal.publish', name: 'Legal — publicar' },
+    { code: 'platform.lgpd.read', name: 'LGPD — leitura' },
+    { code: 'platform.lgpd.dsar', name: 'LGPD — DSAR' },
+    { code: 'platform.audit.read', name: 'Auditoria — leitura' },
+    { code: 'platform.feature_flags.write', name: 'Feature flags' },
+  ];
+  for (const p of platformPerms) {
+    await prisma.platformPermission.upsert({
+      where: { code: p.code },
+      update: { name: p.name },
+      create: p,
+    });
+  }
+  const superRole = await prisma.platformRole.upsert({
+    where: { name: 'PLATFORM_SUPER_ADMIN' },
+    update: {},
+    create: { name: 'PLATFORM_SUPER_ADMIN', description: 'Acesso total à plataforma' },
+  });
+  const allPlatformPerms = await prisma.platformPermission.findMany();
+  for (const p of allPlatformPerms) {
+    await prisma.platformRolePermission.upsert({
+      where: { roleId_permissionId: { roleId: superRole.id, permissionId: p.id } },
+      update: {},
+      create: { roleId: superRole.id, permissionId: p.id },
+    });
+  }
+  const platformPassword = await argon2.hash('Platform123!');
+  const platformOp = await prisma.platformOperator.upsert({
+    where: { email: 'admin@platform.navomnis.local' },
+    update: {},
+    create: {
+      email: 'admin@platform.navomnis.local',
+      passwordHash: platformPassword,
+      displayName: 'Platform Admin',
+    },
+  });
+  await prisma.platformOperatorRole.upsert({
+    where: { operatorId_roleId: { operatorId: platformOp.id, roleId: superRole.id } },
+    update: {},
+    create: { operatorId: platformOp.id, roleId: superRole.id },
+  });
+
+  const starterPlan = await prisma.subscriptionPlan.upsert({
+    where: { code: 'starter' },
+    update: {},
+    create: {
+      code: 'starter',
+      name: 'Starter',
+      planType: SubscriptionPlanType.STARTER,
+      priceCents: 9900,
+      trialDays: 14,
+      features: {
+        create: [
+          { moduleKey: 'sales', enabled: true },
+          { moduleKey: 'purchases', enabled: true },
+          { moduleKey: 'inventory', enabled: true },
+          { moduleKey: 'banking', enabled: false },
+        ],
+      },
+      quotas: {
+        create: [
+          { resource: QuotaResource.USERS, limitValue: 10 },
+          { resource: QuotaResource.COMPANIES, limitValue: 3 },
+          { resource: QuotaResource.API_CALLS, limitValue: 100_000 },
+        ],
+      },
+    },
+  });
+  await prisma.tenantSubscription.upsert({
+    where: { tenantId: tenant.id },
+    update: { planId: starterPlan.id, status: TenantSubscriptionStatus.ACTIVE },
+    create: {
+      tenantId: tenant.id,
+      planId: starterPlan.id,
+      status: TenantSubscriptionStatus.ACTIVE,
+    },
+  });
+
+  await prisma.dataRetentionPolicy.upsert({
+    where: { category: 'audit_logs' },
+    update: {},
+    create: { category: 'audit_logs', retentionDays: 365, description: 'Logs de auditoria' },
+  });
+
+  console.log('Seed concluído.');
+  console.log('  Tenant ERP: demo / admin@demo.navomnis.local / Admin123!');
+  console.log('  Platform: admin@platform.navomnis.local / Platform123!');
 }
 
 main()

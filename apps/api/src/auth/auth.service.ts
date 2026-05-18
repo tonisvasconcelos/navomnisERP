@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
 import * as argon2 from 'argon2';
 import { PrismaService } from '../prisma/prisma.service';
+import { hashInviteToken } from '../platform/users/user-invite.util';
+import type { AcceptUserInviteDto } from './dto/accept-user-invite.dto';
 import type { LoginDto } from './dto/login.dto';
 import type { RegisterDto } from './dto/register.dto';
 import type { JwtAccessPayload } from './jwt.types';
@@ -81,6 +83,15 @@ export class AuthService {
         success: true,
       },
     });
+    await this.prisma.loginHistory.create({
+      data: {
+        userId: user.id,
+        tenantId: tenantLink.tenantId,
+        ip,
+        userAgent,
+        success: true,
+      },
+    });
     return this.issueTokens(user.id, user.email, tenantLink.tenantId, ip, userAgent);
   }
 
@@ -118,7 +129,7 @@ export class AuthService {
     ip?: string,
     userAgent?: string,
   ) {
-    const payload: JwtAccessPayload = { sub: userId, email, tid: tenantId };
+    const payload: JwtAccessPayload = { sub: userId, email, tid: tenantId, ctx: 'tenant' };
     const accessToken = await this.jwt.signAsync(payload);
     const jti = randomUUID();
     const refreshSecret = this.config.get<string>('jwtRefreshSecret') ?? 'dev';
@@ -242,6 +253,57 @@ export class AuthService {
       },
     });
     return { userId: user.id, tenantId: tenant.id };
+  }
+
+  async validateInviteToken(token: string) {
+    const invite = await this.findActiveInvite(token);
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { id: invite.tenantId },
+      select: { id: true, slug: true, name: true },
+    });
+    return {
+      valid: true,
+      email: invite.email,
+      displayName: invite.displayName,
+      tenant,
+    };
+  }
+
+  async acceptInvite(dto: AcceptUserInviteDto) {
+    const invite = await this.findActiveInvite(dto.token);
+    const user = await this.prisma.user.findUnique({ where: { id: invite.userId } });
+    if (!user) {
+      throw new BadRequestException('Convite inválido.');
+    }
+    if (user.passwordHash) {
+      throw new BadRequestException('Convite já foi aceite.');
+    }
+    const passwordHash = await argon2.hash(dto.password);
+    await this.prisma.$transaction([
+      this.prisma.user.update({
+        where: { id: user.id },
+        data: { passwordHash, forcePasswordResetAt: null },
+      }),
+      this.prisma.userInvite.update({
+        where: { id: invite.id },
+        data: { acceptedAt: new Date() },
+      }),
+    ]);
+    return { accepted: true, email: user.email, tenantSlug: (await this.prisma.tenant.findUnique({ where: { id: invite.tenantId } }))?.slug };
+  }
+
+  private async findActiveInvite(token: string) {
+    if (!token?.trim()) {
+      throw new BadRequestException('Token obrigatório.');
+    }
+    const tokenHash = hashInviteToken(token.trim());
+    const invite = await this.prisma.userInvite.findUnique({
+      where: { tokenHash },
+    });
+    if (!invite || invite.acceptedAt || invite.expiresAt < new Date()) {
+      throw new BadRequestException('Convite inválido ou expirado.');
+    }
+    return invite;
   }
 }
 

@@ -11,6 +11,75 @@ enum TenantStatus {
   ACTIVE
   SUSPENDED
   PROVISIONING
+  BLOCKED
+  EXPIRED
+  TRIAL
+  PENDING_ACTIVATION
+}
+
+enum AuditScope {
+  TENANT
+  PLATFORM
+}
+
+enum SubscriptionPlanType {
+  FREE
+  STARTER
+  PROFESSIONAL
+  ENTERPRISE
+  CUSTOM
+}
+
+enum TenantSubscriptionStatus {
+  ACTIVE
+  TRIAL
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+  EXPIRED
+}
+
+enum QuotaResource {
+  USERS
+  COMPANIES
+  BRANCHES
+  STORAGE_MB
+  API_CALLS
+  BANK_INTEGRATIONS
+  INVENTORY_RECORDS
+  INVOICES
+  NOTIFICATIONS
+  AI_USAGE
+  QUEUE_JOBS
+}
+
+enum DataSubjectRequestType {
+  EXPORT
+  DELETE
+  ANONYMIZE
+}
+
+enum DataSubjectRequestStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  REJECTED
+  CANCELLED
+}
+
+enum LegalDocumentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum TelemetryEventKind {
+  API_REQUEST
+  QUEUE_JOB
+  LOGIN
+  MODULE_USAGE
+  ERROR
+  HEALTH_CHECK
 }
 
 enum PartyKind {
@@ -251,14 +320,28 @@ model Tenant {
   id            String       @id @default(uuid())
   slug          String       @unique
   name          String
+  legalName     String?
   status        TenantStatus @default(PROVISIONING)
+  timezone      String       @default("America/Sao_Paulo")
+  defaultLanguage String     @default("pt-BR")
+  countryCode   String?      @default("BR")
+  taxId         String?
   retentionDays Int?
+  trialEndsAt   DateTime?
+  suspendedAt   DateTime?
+  blockedAt     DateTime?
   createdAt     DateTime     @default(now())
   updatedAt     DateTime     @updatedAt
   deletedAt     DateTime?
 
   branding                 TenantBranding?
+  subscription             TenantSubscription?
+  usageSnapshots           TenantUsageSnapshot[]
+  featureOverrides         TenantFeatureOverride[]
+  consentRecords           ConsentRecord[]
+  dataSubjectRequests      DataSubjectRequest[]
   userTenants              UserTenant[]
+  userInvites              UserInvite[]
   companies                Company[]
   parties                  Party[]
   items                    Item[]
@@ -342,14 +425,17 @@ model DocumentNumberSeries {
 }
 
 model TenantBranding {
-  id           String   @id @default(uuid())
-  tenantId     String   @unique
-  logoUrl      String?
-  primaryColor String?  @default("#0f172a")
-  accentColor  String?  @default("#2563eb")
-  emailFooter  String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id               String   @id @default(uuid())
+  tenantId         String   @unique
+  logoUrl          String?
+  faviconUrl       String?
+  legalDisplayName String?
+  customDomain     String?  @unique
+  primaryColor     String?  @default("#0f172a")
+  accentColor      String?  @default("#2563eb")
+  emailFooter      String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
 
   tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
 }
@@ -362,11 +448,15 @@ model User {
   locale       String    @default("pt-BR")
   mfaEnabled   Boolean   @default(false)
   mfaSecret    String?
+  blockedAt    DateTime?
+  forcePasswordResetAt DateTime?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 
   refreshTokens       RefreshToken[]
+  loginHistories      LoginHistory[]
+  devices             DeviceRegistry[]
   accounts            Account[]
   userTenants         UserTenant[]
   userCompanies       UserCompany[]
@@ -382,6 +472,26 @@ model User {
   inventoryLossEvents InventoryLossEvent[]     @relation("InventoryLossCreatedBy")
   bankConsents        BankConsent[]            @relation("BankConsentAuthorizer")
   bankingAccessLogs   BankingAccessLog[]
+  userInvites         UserInvite[]
+}
+
+model UserInvite {
+  id          String    @id @default(uuid())
+  userId      String
+  email       String
+  displayName String
+  tenantId    String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  invitedById String?
+  createdAt   DateTime  @default(now())
+
+  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant    Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  invitedBy PlatformOperator? @relation(fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@index([email, tenantId])
 }
 
 model Account {
@@ -839,21 +949,28 @@ model EmailTemplate {
 }
 
 model AuditLog {
-  id         String   @id @default(uuid())
-  tenantId   String?
-  actorId    String?
-  action     String
-  entityType String
-  entityId   String?
-  metadata   Json?
-  ip         String?
-  userAgent  String?
-  createdAt  DateTime @default(now())
+  id                 String     @id @default(uuid())
+  scope              AuditScope @default(TENANT)
+  tenantId           String?
+  targetTenantId     String?
+  actorId            String?
+  platformOperatorId String?
+  action             String
+  entityType         String
+  entityId           String?
+  metadata           Json?
+  ip                 String?
+  userAgent          String?
+  requestId          String?
+  createdAt          DateTime   @default(now())
 
-  tenant Tenant? @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-  actor  User?   @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  tenant           Tenant?           @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  actor            User?             @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+  platformOperator PlatformOperator? @relation(fields: [platformOperatorId], references: [id], onDelete: SetNull)
 
   @@index([tenantId, createdAt])
+  @@index([scope, createdAt])
+  @@index([platformOperatorId, createdAt])
 }
 
 model AccessLog {
@@ -871,25 +988,42 @@ model AccessLog {
 }
 
 model LegalDocumentVersion {
-  id          String      @id @default(uuid())
-  kind        ConsentKind
-  version     String
-  content     String
-  effectiveAt DateTime    @default(now())
-  createdAt   DateTime    @default(now())
+  id                     String              @id @default(uuid())
+  kind                   ConsentKind
+  version                String
+  content                String
+  status                 LegalDocumentStatus @default(DRAFT)
+  isMandatory            Boolean             @default(true)
+  effectiveAt            DateTime            @default(now())
+  publishedAt            DateTime?
+  publishedByPlatformId  String?
+  createdAt              DateTime            @default(now())
+  updatedAt              DateTime            @updatedAt
+
+  publishedBy PlatformOperator? @relation(fields: [publishedByPlatformId], references: [id], onDelete: SetNull)
+  consents    ConsentRecord[]
+
+  @@unique([kind, version])
 }
 
 model ConsentRecord {
-  id         String      @id @default(uuid())
-  userId     String
-  kind       ConsentKind
-  version    String
-  acceptedAt DateTime    @default(now())
-  ip         String?
+  id                     String      @id @default(uuid())
+  userId                 String
+  tenantId               String?
+  kind                   ConsentKind
+  version                String
+  legalDocumentVersionId String?
+  acceptedAt             DateTime    @default(now())
+  ip                     String?
+  userAgent              String?
+  deviceFingerprint      String?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                 User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenant               Tenant?               @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  legalDocumentVersion LegalDocumentVersion? @relation(fields: [legalDocumentVersionId], references: [id], onDelete: SetNull)
 
   @@index([userId, kind])
+  @@index([tenantId, kind])
 }
 
 model Attachment {
@@ -2394,4 +2528,287 @@ model BankingAccessLog {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([tenantId, userId, createdAt])
+}
+
+// --- Platform SaaS administration ---
+
+model PlatformOperator {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  displayName  String
+  mfaEnabled   Boolean   @default(false)
+  mfaSecret    String?
+  totpPending  Boolean   @default(false)
+  blockedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  operatorRoles       PlatformOperatorRole[]
+  refreshTokens       PlatformRefreshToken[]
+  sessions            PlatformSession[]
+  auditLogs           AuditLog[]
+  publishedLegalDocs  LegalDocumentVersion[]
+  loginHistories      PlatformLoginHistory[]
+  userInvites         UserInvite[]
+}
+
+model PlatformPermission {
+  id   String @id @default(uuid())
+  code String @unique
+  name String
+
+  rolePermissions PlatformRolePermission[]
+}
+
+model PlatformRole {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  rolePermissions PlatformRolePermission[]
+  operatorRoles   PlatformOperatorRole[]
+}
+
+model PlatformRolePermission {
+  roleId       String
+  permissionId String
+
+  role       PlatformRole       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission PlatformPermission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+}
+
+model PlatformOperatorRole {
+  id         String @id @default(uuid())
+  operatorId String
+  roleId     String
+
+  operator PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+  role     PlatformRole     @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@unique([operatorId, roleId])
+}
+
+model PlatformRefreshToken {
+  id          String    @id @default(uuid())
+  operatorId  String
+  jti         String    @unique
+  hashedToken String
+  ip          String?
+  userAgent   String?
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  createdAt   DateTime  @default(now())
+
+  operator PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@index([operatorId, revokedAt])
+}
+
+model PlatformSession {
+  id               String    @id @default(uuid())
+  operatorId       String
+  deviceFingerprint String?
+  ip               String?
+  userAgent        String?
+  lastSeenAt       DateTime  @default(now())
+  revokedAt        DateTime?
+  createdAt        DateTime  @default(now())
+
+  operator PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@index([operatorId, revokedAt])
+}
+
+model PlatformLoginHistory {
+  id         String   @id @default(uuid())
+  operatorId String
+  ip         String?
+  userAgent  String?
+  success    Boolean
+  reason     String?
+  createdAt  DateTime @default(now())
+
+  operator PlatformOperator @relation(fields: [operatorId], references: [id], onDelete: Cascade)
+
+  @@index([operatorId, createdAt])
+}
+
+model LoginHistory {
+  id        String   @id @default(uuid())
+  userId    String
+  tenantId  String?
+  ip        String?
+  userAgent String?
+  success   Boolean
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+model DeviceRegistry {
+  id                String   @id @default(uuid())
+  userId            String
+  fingerprint       String
+  userAgent         String?
+  lastIp            String?
+  lastSeenAt        DateTime @default(now())
+  trusted           Boolean  @default(false)
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fingerprint])
+}
+
+model SubscriptionPlan {
+  id           String               @id @default(uuid())
+  code         String               @unique
+  name         String
+  planType     SubscriptionPlanType
+  description  String?
+  priceCents   Int                  @default(0)
+  currency     String               @default("BRL")
+  billingCycle String               @default("monthly")
+  trialDays    Int                  @default(0)
+  isActive     Boolean              @default(true)
+  archivedAt   DateTime?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  features      PlanFeature[]
+  quotas        PlanQuota[]
+  subscriptions TenantSubscription[]
+}
+
+model PlanFeature {
+  id        String  @id @default(uuid())
+  planId    String
+  moduleKey String
+  enabled   Boolean @default(true)
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, moduleKey])
+}
+
+model PlanQuota {
+  id        String        @id @default(uuid())
+  planId    String
+  resource  QuotaResource
+  limitValue Int
+
+  plan SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  @@unique([planId, resource])
+}
+
+model TenantSubscription {
+  id                 String                   @id @default(uuid())
+  tenantId           String                   @unique
+  planId             String
+  status             TenantSubscriptionStatus @default(TRIAL)
+  currentPeriodStart DateTime                 @default(now())
+  currentPeriodEnd   DateTime?
+  graceEndsAt        DateTime?
+  cancelledAt        DateTime?
+  createdAt          DateTime                 @default(now())
+  updatedAt          DateTime                 @updatedAt
+
+  tenant Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  plan   SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+
+  @@index([planId, status])
+}
+
+model TenantUsageSnapshot {
+  id        String        @id @default(uuid())
+  tenantId  String
+  resource  QuotaResource
+  usedValue Int
+  periodKey String
+  createdAt DateTime      @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, resource, periodKey])
+}
+
+model TenantFeatureOverride {
+  id        String   @id @default(uuid())
+  tenantId  String
+  moduleKey String
+  enabled   Boolean
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, moduleKey])
+}
+
+model TelemetryEvent {
+  id        String             @id @default(uuid())
+  kind      TelemetryEventKind
+  tenantId  String?
+  payload   Json?
+  createdAt DateTime           @default(now())
+
+  @@index([kind, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+model ApiUsageRollup {
+  id           String   @id @default(uuid())
+  tenantId     String?
+  routePattern String
+  count        Int
+  periodKey    String
+  createdAt    DateTime @default(now())
+
+  @@unique([tenantId, routePattern, periodKey])
+}
+
+model QueueHealthSnapshot {
+  id          String   @id @default(uuid())
+  queueName   String
+  waiting     Int
+  active      Int
+  failed      Int
+  completed   Int
+  capturedAt  DateTime @default(now())
+
+  @@index([queueName, capturedAt])
+}
+
+model DataSubjectRequest {
+  id          String                   @id @default(uuid())
+  tenantId    String
+  userId      String?
+  email       String?
+  requestType DataSubjectRequestType
+  status      DataSubjectRequestStatus @default(OPEN)
+  notes       String?
+  completedAt DateTime?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, status])
+}
+
+model DataRetentionPolicy {
+  id            String   @id @default(uuid())
+  category      String   @unique
+  retentionDays Int
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 }

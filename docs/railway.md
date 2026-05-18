@@ -1,73 +1,74 @@
 # Railway — API + worker + dados
 
-## Projeto ligado a este repositório (CLI)
+## Projeto ligado a este repositório
 
-Na máquina local foi executado `railway init` nesta pasta e criado o projeto **patient-youth** (pode renomear no painel da Railway).
+- **Projeto**: [patient-youth](https://railway.com/project/9d940007-4e9f-4d82-95e7-96aa44bff4e5) (`9d940007-4e9f-4d82-95e7-96aa44bff4e5`)
+- **Ambiente staging**: duplicado a partir de production (Postgres + Redis com URLs internas)
+- **MCP**: `railway setup agent -y` — reinicie o Cursor; se MCP falhar auth, use CLI (`railway login`)
 
-- **Painel**: [railway.com/project/9d940007-4e9f-4d82-95e7-96aa44bff4e5](https://railway.com/project/9d940007-4e9f-4d82-95e7-96aa44bff4e5)
-- **Serviços criados**: `Postgres` (online), `Redis-o1_P` (Redis gerido), serviços vazios `api` e `worker` (ainda sem *build* / imagem).
-- **MCP / skills**: foi corrido `railway setup agent -y`, que instala o skill `use-railway` e regista o **Railway MCP** no Cursor global (`%USERPROFILE%\.cursor\mcp.json`). Reinicie o Cursor para carregar o MCP.
+## Serviços (staging)
 
-**Próximos passos no painel**
+| Serviço | ID | Estado | Notas |
+|---------|-----|--------|-------|
+| Postgres | (plugin) | Online | `DATABASE_PUBLIC_URL` para migrate local |
+| Redis-o1_P | (plugin) | Online | `REDIS_URL` interno |
+| **api** | `ca68752f-b002-4877-a988-324bfda022d0` | **Online** | https://api-staging-fa90.up.railway.app |
+| **worker** | `a72ab94e-6b69-4165-8421-3b1b8424f20c` | **Online** | `node apps/api/dist/worker.main.js`, sem healthcheck HTTP |
 
-1. No serviço **api**: ligar o repositório Git **ou** definir *Dockerfile path* = `Dockerfile` na raiz; comando de arranque `node apps/api/dist/main.js` após build; variáveis `DATABASE_URL`, `REDIS_URL`, `WEB_URL`, JWT, etc. (use as referências internas que a Railway injeta ao referenciar Postgres/Redis).
-2. No serviço **worker**: mesma imagem ou mesmo repo; comando `node apps/api/dist/worker.main.js`; `PROCESS_ROLE=worker`; `RESEND_API_KEY` em produção.
-3. **Release / Pre-deploy** no `api`: `pnpm --filter @navomnis/api migrate:deploy`.
-4. Renomear o projeto e o serviço Redis no UI se preferir nomes estáveis (`navomnis-redis`, etc.).
+## Imagem Docker (raiz)
 
-## Serviços recomendados
-
-| Serviço | Função |
-|---------|--------|
-| Postgres | `DATABASE_URL` |
-| Redis | `REDIS_URL` (BullMQ) |
-| `api` | HTTP Nest — comando `node apps/api/dist/main.js` (ou imagem Docker com o mesmo CMD) |
-| `worker` | Fila de e-mails — `PROCESS_ROLE=worker` e `node apps/api/dist/worker.main.js` |
-
-Use a rede privada da Railway para `DATABASE_URL` e `REDIS_URL` internos.
-
-## Imagem Docker
-
-Na raiz do repositório:
+- [`Dockerfile`](../Dockerfile) — `openssl` + `libc6-compat` para Prisma em Alpine
+- [`railway.toml`](../railway.toml) — builder Dockerfile; healthcheck só no serviço `api` (config Railway)
 
 ```bash
-docker build -t navomnis-api .
+railway link   # patient-youth
+railway up -s api -e staging
+railway up -s worker -e staging
 ```
 
-- **API**: `CMD` predefinido `node apps/api/dist/main.js`
-- **Worker**: sobrescreva o comando no serviço Railway, por exemplo:
+## Variáveis (api, staging)
 
-  ```bash
-  node apps/api/dist/worker.main.js
-  ```
+| Variável | Exemplo / notas |
+|----------|-----------------|
+| `DATABASE_URL` | Referência Postgres (interno) |
+| `REDIS_URL` | Referência Redis (interno) |
+| `NODE_ENV` | `production` |
+| `PROCESS_ROLE` | `api` |
+| `WEB_URL` | CSV Vercel web, ex. `https://web-oss365.vercel.app` |
+| `ADMIN_WEB_URL` | CSV Vercel admin |
+| `JWT_*` / `PLATFORM_JWT_*` | ≥32 chars, distintos entre tenant e platform |
+| `SWAGGER_ENABLED` | `false` em staging público |
 
-Defina `PROCESS_ROLE=worker` no serviço worker e `PROCESS_ROLE=api` (ou vazio) no serviço API.
+Worker: `PROCESS_ROLE=worker`, mesmas DB/Redis/JWT/WEB_URL, `RESEND_API_KEY` (placeholder aceite em staging).
 
-## Migrações (release)
+## Migrações e seed
 
-Execute na fase **Release** ou **Pre-deploy** de **ambos** os serviços que precisam de Prisma (normalmente só o `api` antes do arranque, ou um job dedicado):
+**Não** usar `railway run` para migrate a partir do PC (URL `*.railway.internal` não resolve).
 
-```bash
-cd apps/api && pnpm migrate:deploy
+1. Migrações locais com URL pública:
+
+```powershell
+cd apps/api
+$env:DATABASE_URL="<DATABASE_PUBLIC_URL do Postgres staging>"
+pnpm exec prisma migrate deploy
+pnpm exec prisma db seed
 ```
 
-Ou a partir da raiz com filtro:
+2. Ou pre-deploy na Railway (rede interna): `npx prisma migrate deploy --schema=apps/api/prisma/schema.prisma`
 
-```bash
-pnpm --filter @navomnis/api migrate:deploy
-```
+> Ficheiro `20260515200000_init/migration.sql` foi corrigido (remoção de BOM UTF-8).
 
-## Desenvolvimento local
+## Health
 
-- Terminal 1: `pnpm dev` (Turbo) ou `pnpm --filter @navomnis/api dev` para a API.
-- Terminal 2: `pnpm --filter @navomnis/api dev:worker` para processar a fila de notificações.
+- `GET https://api-staging-fa90.up.railway.app/api/v1/health`
+- `GET …/health/db` — Postgres
+- `GET …/health/redis` — Redis
 
-Sem o worker, os jobs ficam em `waiting` na fila `notifications`.
+## Worker
 
-## Escalar workers
-
-- Aumente réplicas do serviço `worker` ou ajuste a concorrência por processo na configuração BullMQ.
-- Evite múltiplos processos a competirem sem política clara de concorrência na mesma fila; prefira réplicas homogéneas com a mesma configuração.
+- Start: `node apps/api/dist/worker.main.js`
+- Sem listener HTTP → desativar `healthcheckPath` no serviço worker (config via `railway environment edit` JSON)
+- Local: `pnpm --filter @navomnis/api dev:worker`
 
 ## Scripts CLI
 

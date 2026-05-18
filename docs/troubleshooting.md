@@ -16,10 +16,13 @@
 - **Jobs não processam**: confirme o serviço `worker` com `PROCESS_ROLE=worker` e o mesmo `REDIS_URL` que a API.
 - **`ECONNREFUSED`**: URL Redis interna errada ou serviço Redis parado.
 
-## Vercel (web)
+## Vercel (web e admin)
 
-- **Build sem `VITE_API_URL` em produção**: o schema Zod em `apps/web/src/env.ts` falha de propósito — defina a variável no painel Vercel.
-- **CORS no browser**: a origem do site deve constar em `WEB_URL` (CSV) na API.
+- **Página em branco / `Variáveis de ambiente do frontend inválidas`**: o bundle foi construído sem `VITE_API_URL`. Corra `pnpm run build:staging-front` (ou defina `VITE_API_URL` antes de `vite build`) e volte a fazer deploy prebuilt — ver [vercel.md](./vercel.md#deploy-prebuilt-cli).
+- **Admin login 405 em `/api/v1/...`**: o front está a chamar a origem Vercel (fallback antigo). Rebuild com `VITE_API_URL` absoluto para a API Railway.
+- **401 em `manifest.webmanifest` ou assets**: **Deployment Protection** (Vercel Authentication) ativo — desligar no painel ou usar Shareable Link.
+- **Build sem `VITE_API_URL` em produção**: validação em `apps/web/src/env.ts` e `apps/admin/src/env.ts`.
+- **CORS no browser**: origens do web em `WEB_URL` e do admin em `ADMIN_WEB_URL` (CSV) na API.
 
 ## Docker
 

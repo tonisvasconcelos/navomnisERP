@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
@@ -14,7 +14,10 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     });
   }
 
-  async validate(payload: JwtAccessPayload): Promise<JwtAccessPayload> {
-    return payload;
+  async validate(payload: JwtAccessPayload & { ctx?: string }): Promise<JwtAccessPayload> {
+    if ((payload as { ctx?: string }).ctx === 'platform') {
+      throw new UnauthorizedException('Token de plataforma não permitido nesta API.');
+    }
+    return { ...payload, ctx: 'tenant' };
   }
 }

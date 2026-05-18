@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../auth-store';
+import { LoginBackgroundCarousel } from '../components/login-background-carousel';
 import { api } from '@/shared/api/client';
 
 const schema = z.object({
@@ -46,11 +47,12 @@ export function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-4">
+    <div className="relative flex min-h-screen items-center justify-center p-4">
+      <LoginBackgroundCarousel />
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
-        className="w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-900/80 p-8 shadow-2xl backdrop-blur"
+        className="relative z-10 w-full max-w-md rounded-2xl border border-slate-700/80 bg-slate-900/80 p-8 shadow-2xl backdrop-blur"
       >
         <h1 className="text-center text-2xl font-semibold text-white">Navomnis ERP</h1>
         <p className="mt-1 text-center text-sm text-slate-400">Entre na sua organização</p>

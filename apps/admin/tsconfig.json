@@ -1,0 +1,11 @@
+{
+  "extends": "@navomnis/config/typescript/react.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "types": ["vite/client"],
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src"]
+}

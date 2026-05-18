@@ -14,6 +14,8 @@ import type { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { RequirePermissions } from '../../rbac/permissions.decorator';
 import { PermissionsGuard } from '../../rbac/permissions.guard';
+import { RequiresModule } from '../../subscription/decorators/required-module.decorator';
+import { FeatureFlagGuard } from '../../subscription/guards/feature-flag.guard';
 import { TenantAccessGuard } from '../../tenant/tenant-access.guard';
 import { OpenFinanceInstitutionsService } from './open-finance/open-finance-institutions.service';
 import { BankConnectionsService } from './connections/bank-connections.service';
@@ -35,7 +37,8 @@ import { BANK_SYNC_QUEUE, type BankSyncJobPayload } from './banking.constants';
 
 @ApiTags('banking')
 @Controller({ path: 'banking', version: '1' })
-@UseGuards(OpenFinanceEnabledGuard, JwtAuthGuard, TenantAccessGuard, PermissionsGuard)
+@UseGuards(OpenFinanceEnabledGuard, JwtAuthGuard, TenantAccessGuard, PermissionsGuard, FeatureFlagGuard)
+@RequiresModule('banking')
 export class BankingController {
   constructor(
     private readonly institutions: OpenFinanceInstitutionsService,

@@ -20,7 +20,8 @@ export default defineConfig({
         start_url: '/',
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,svg,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,svg,woff2,jpg,jpeg,webp}'],
+        globIgnores: ['**/login/**'],
       },
     }),
   ],

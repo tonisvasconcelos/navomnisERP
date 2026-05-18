@@ -5,7 +5,7 @@
     "build": "turbo build",
     "dev": "turbo dev",
     "lint": "turbo lint",
-    "typecheck": "turbo run typecheck --filter=@navomnis/web --filter=@navomnis/api",
+    "typecheck": "turbo run typecheck --filter=@navomnis/web --filter=@navomnis/api --filter=@navomnis/admin",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md}\"",
     "prepare": "husky"
