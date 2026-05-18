@@ -1,5 +1,5 @@
 # Deploy em `main`: web (Vercel) e gancho opcional Railway.
-# Configure os secrets no repositório / ambiente GitHub antes de ativar os passos.
+# Configure VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID (e VERCEL_ADMIN_PROJECT_ID) nos secrets do repositório.
 
 name: Deploy
 
@@ -26,13 +26,18 @@ jobs:
     name: Vercel (web)
     runs-on: ubuntu-latest
     if: >-
-      secrets.VERCEL_TOKEN != '' &&
-      (github.ref == 'refs/heads/main' ||
-        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment:
       name: production
     steps:
       - uses: actions/checkout@v4
+      - name: Require Vercel secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "::error::Configure repository secret VERCEL_TOKEN to enable deploy."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -41,21 +46,31 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build web
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: pnpm --filter @navomnis/web run build
+      - name: Prepare Vercel prebuilt output
+        working-directory: apps/web
+        run: |
+          rm -rf .vercel/output
+          mkdir -p .vercel/output/static
+          cp -r dist/* .vercel/output/static/
+          echo '{"version":3,"routes":[{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
       - name: Deploy to Vercel
         working-directory: apps/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --prod --token "$VERCEL_TOKEN" --yes
+        run: npx vercel deploy --prod --prebuilt --token "$VERCEL_TOKEN" --yes
 
   deploy-railway:
     name: Railway (API / worker)
     runs-on: ubuntu-latest
     if: >-
-      secrets.RAILWAY_TOKEN != '' &&
-      (github.ref == 'refs/heads/main' ||
-        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment:
       name: production
     steps:
@@ -74,13 +89,18 @@ jobs:
     name: Vercel (web preview / staging)
     runs-on: ubuntu-latest
     if: >-
-      secrets.VERCEL_TOKEN != '' &&
-      (github.ref == 'refs/heads/develop' ||
-        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+      github.ref == 'refs/heads/develop' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment:
       name: staging
     steps:
       - uses: actions/checkout@v4
+      - name: Require Vercel secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ]; then
+            echo "::error::Configure repository secret VERCEL_TOKEN to enable deploy."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -89,21 +109,31 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build web
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL_STAGING }}
+        run: pnpm --filter @navomnis/web run build
+      - name: Prepare Vercel prebuilt output
+        working-directory: apps/web
+        run: |
+          rm -rf .vercel/output
+          mkdir -p .vercel/output/static
+          cp -r dist/* .vercel/output/static/
+          echo '{"version":3,"routes":[{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
       - name: Deploy preview to Vercel
         working-directory: apps/web
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --token "$VERCEL_TOKEN" --yes
+        run: npx vercel deploy --prebuilt --token "$VERCEL_TOKEN" --yes
 
   deploy-railway-staging:
     name: Railway (staging)
     runs-on: ubuntu-latest
     if: >-
-      secrets.RAILWAY_TOKEN != '' &&
-      (github.ref == 'refs/heads/develop' ||
-        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+      github.ref == 'refs/heads/develop' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment:
       name: staging
     steps:
@@ -121,14 +151,18 @@ jobs:
     name: Vercel (platform admin)
     runs-on: ubuntu-latest
     if: >-
-      secrets.VERCEL_TOKEN != '' &&
-      secrets.VERCEL_ADMIN_PROJECT_ID != '' &&
-      (github.ref == 'refs/heads/main' ||
-        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
+      github.ref == 'refs/heads/main' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'production')
     environment:
       name: production
     steps:
       - uses: actions/checkout@v4
+      - name: Require Vercel secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ADMIN_PROJECT_ID }}" ]; then
+            echo "::error::Configure VERCEL_TOKEN and VERCEL_ADMIN_PROJECT_ID."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -137,26 +171,41 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build admin
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL }}
+        run: pnpm --filter @navomnis/admin run build
+      - name: Prepare Vercel prebuilt output
+        working-directory: apps/admin
+        run: |
+          rm -rf .vercel/output
+          mkdir -p .vercel/output/static
+          cp -r dist/* .vercel/output/static/
+          echo '{"version":3,"routes":[{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
       - name: Deploy admin to Vercel
         working-directory: apps/admin
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --prod --token "$VERCEL_TOKEN" --yes
+        run: npx vercel deploy --prod --prebuilt --token "$VERCEL_TOKEN" --yes
 
   deploy-admin-staging:
     name: Vercel (admin staging)
     runs-on: ubuntu-latest
     if: >-
-      secrets.VERCEL_TOKEN != '' &&
-      secrets.VERCEL_ADMIN_PROJECT_ID != '' &&
-      (github.ref == 'refs/heads/develop' ||
-        github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
+      github.ref == 'refs/heads/develop' ||
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.environment == 'staging')
     environment:
       name: staging
     steps:
       - uses: actions/checkout@v4
+      - name: Require Vercel secrets
+        run: |
+          if [ -z "${{ secrets.VERCEL_TOKEN }}" ] || [ -z "${{ secrets.VERCEL_ADMIN_PROJECT_ID }}" ]; then
+            echo "::error::Configure VERCEL_TOKEN and VERCEL_ADMIN_PROJECT_ID."
+            exit 1
+          fi
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -165,10 +214,21 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Build admin
+        env:
+          VITE_API_URL: ${{ secrets.VITE_API_URL_STAGING }}
+        run: pnpm --filter @navomnis/admin run build
+      - name: Prepare Vercel prebuilt output
+        working-directory: apps/admin
+        run: |
+          rm -rf .vercel/output
+          mkdir -p .vercel/output/static
+          cp -r dist/* .vercel/output/static/
+          echo '{"version":3,"routes":[{"handle":"filesystem"},{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
       - name: Deploy admin preview to Vercel
         working-directory: apps/admin
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_ADMIN_PROJECT_ID }}
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
-        run: npx vercel deploy --token "$VERCEL_TOKEN" --yes
+        run: npx vercel deploy --prebuilt --token "$VERCEL_TOKEN" --yes
