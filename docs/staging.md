@@ -43,6 +43,8 @@ Dois projetos Vercel (monorepo):
 
 **Smoke platform:** [staging-platform-admin-smoke.md](./staging-platform-admin-smoke.md)
 
+**Smoke Compras / Financeiro (tenant web):** login demo → **Compras** → abrir `PC-0001` → **Registar receção** → **Estoque** (saldo aumentou). **Financeiro** → resumo e **Plano de contas**. Paleta **Ctrl+K** no header.
+
 **Registo de prova:** [staging-proof-log.md](./staging-proof-log.md)
 
 ## Acesso ao UI (Vercel)

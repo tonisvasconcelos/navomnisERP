@@ -25,6 +25,21 @@ export class PartiesService {
     });
   }
 
+  listVendors() {
+    const ctx = getTenantContext();
+    if (!ctx) {
+      throw new ForbiddenException('Contexto de tenant ausente.');
+    }
+    return this.prisma.party.findMany({
+      where: {
+        tenantId: ctx.tenantId,
+        kind: { in: [PartyKind.SUPPLIER, PartyKind.BOTH] },
+      },
+      orderBy: { name: 'asc' },
+      take: 500,
+    });
+  }
+
   listCustomers() {
     const ctx = getTenantContext();
     if (!ctx) {

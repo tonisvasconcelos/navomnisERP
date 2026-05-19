@@ -29,6 +29,13 @@ export class PartiesController {
     return this.parties.listCustomers();
   }
 
+  @Get('vendors')
+  @RequirePermissions('master.read')
+  @ApiOperation({ summary: 'Listar fornecedores' })
+  vendors() {
+    return this.parties.listVendors();
+  }
+
   @Post('customers')
   @RequirePermissions('master.write')
   @ApiOperation({ summary: 'Criar cliente' })

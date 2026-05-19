@@ -1,9 +1,11 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   ParseUUIDPipe,
+  Patch,
   Post,
   Req,
   UseGuards,
@@ -14,7 +16,12 @@ import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TenantAccessGuard } from '../../tenant/tenant-access.guard';
 import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { RequirePermissions } from '../../rbac/permissions.decorator';
+import {
+  AddPurchaseOrderLineDto,
+  CreatePurchaseOrderDto,
+} from './dto/create-purchase-order.dto';
 import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
+import { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
 import { PurchasesService } from './purchases.service';
 
 @ApiTags('purchases')
@@ -31,11 +38,59 @@ export class PurchasesController {
     return this.purchases.listOrders();
   }
 
+  @Post('orders')
+  @RequirePermissions('purchases.write')
+  @ApiOperation({ summary: 'Criar pedido de compra (rascunho)' })
+  createOrder(@Body() dto: CreatePurchaseOrderDto, @Req() req: Request) {
+    return this.purchases.createOrder(dto, req);
+  }
+
   @Get('orders/:id')
   @RequirePermissions('purchases.read')
   @ApiOperation({ summary: 'Obter pedido de compra' })
   orderById(@Param('id', ParseUUIDPipe) id: string) {
     return this.purchases.getOrder(id);
+  }
+
+  @Post('orders/:id/lines')
+  @RequirePermissions('purchases.write')
+  @ApiOperation({ summary: 'Adicionar linha ao pedido' })
+  addLine(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: AddPurchaseOrderLineDto,
+    @Req() req: Request,
+  ) {
+    return this.purchases.addLine(id, dto, req);
+  }
+
+  @Patch('orders/:id/lines/:lineId')
+  @RequirePermissions('purchases.write')
+  @ApiOperation({ summary: 'Atualizar linha (rascunho)' })
+  updateLine(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Body() dto: UpdatePurchaseOrderLineDto,
+    @Req() req: Request,
+  ) {
+    return this.purchases.updateLine(id, lineId, dto, req);
+  }
+
+  @Delete('orders/:id/lines/:lineId')
+  @RequirePermissions('purchases.write')
+  @ApiOperation({ summary: 'Remover linha (rascunho)' })
+  removeLine(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('lineId', ParseUUIDPipe) lineId: string,
+    @Req() req: Request,
+  ) {
+    return this.purchases.removeLine(id, lineId, req);
+  }
+
+  @Post('orders/:id/release')
+  @RequirePermissions('purchases.write')
+  @ApiOperation({ summary: 'Libertar pedido (rascunho → aberto)' })
+  release(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return this.purchases.releaseOrder(id, req);
   }
 
   @Post('orders/:id/receive')

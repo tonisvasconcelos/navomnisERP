@@ -10,6 +10,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { getTenantContext } from '../../tenant/tenant-storage';
 import { AuditService } from '../audit/audit.service';
 import type { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
+import type { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
 
 type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
 
@@ -48,6 +49,166 @@ export class PurchasesService {
       throw new NotFoundException('Pedido de compra não encontrado.');
     }
     return order;
+  }
+
+  async createOrder(dto: { companyId: string; vendorId: string }, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    await this.assertVendor(this.prisma, tenantId, dto.vendorId);
+    await this.assertCompany(tenantId, dto.companyId);
+    await this.assertUserCompany(userId, dto.companyId);
+    const order = await this.prisma.$transaction(async (tx: PrismaTx) => {
+      const number = await this.nextOrderNumberInTx(tx, tenantId);
+      return tx.purchaseOrder.create({
+        data: {
+          tenantId,
+          companyId: dto.companyId,
+          vendorId: dto.vendorId,
+          number,
+          status: DocumentStatus.DRAFT,
+          totalAmount: new Prisma.Decimal(0),
+        },
+      });
+    });
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.create',
+      entityType: 'PurchaseOrder',
+      entityId: order.id,
+      metadata: { number: order.number },
+      req,
+    });
+    return order;
+  }
+
+  async addLine(
+    orderId: string,
+    dto: { itemId: string; quantity: string; unitCost: string },
+    req?: Request,
+  ) {
+    const { tenantId, userId } = this.ctx();
+    const order = await this.getOrderOrThrow(tenantId, orderId);
+    if (order.status !== DocumentStatus.DRAFT) {
+      throw new BadRequestException('Pedido não está em rascunho.');
+    }
+    await this.assertItem(tenantId, dto.itemId);
+    const qty = new Prisma.Decimal(dto.quantity);
+    const cost = new Prisma.Decimal(dto.unitCost);
+    const lineTotal = qty.mul(cost).toDecimalPlaces(2);
+    await this.prisma.purchaseOrderLine.create({
+      data: {
+        orderId: order.id,
+        itemId: dto.itemId,
+        quantity: qty,
+        unitCost: cost,
+        lineTotal,
+      },
+    });
+    await this.recalcOrderTotal(order.id, tenantId);
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.line_add',
+      entityType: 'PurchaseOrder',
+      entityId: order.id,
+      metadata: { itemId: dto.itemId },
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
+  async removeLine(orderId: string, lineId: string, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    const line = await this.prisma.purchaseOrderLine.findFirst({
+      where: {
+        id: lineId,
+        orderId,
+        order: { tenantId, status: DocumentStatus.DRAFT },
+      },
+    });
+    if (!line) {
+      throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
+    }
+    await this.prisma.purchaseOrderLine.delete({ where: { id: lineId } });
+    await this.recalcOrderTotal(orderId, tenantId);
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.line_remove',
+      entityType: 'PurchaseOrder',
+      entityId: orderId,
+      metadata: { lineId },
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
+  async updateLine(orderId: string, lineId: string, dto: UpdatePurchaseOrderLineDto, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    const line = await this.prisma.purchaseOrderLine.findFirst({
+      where: {
+        id: lineId,
+        orderId,
+        order: { tenantId, status: DocumentStatus.DRAFT },
+      },
+    });
+    if (!line) {
+      throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
+    }
+    const qty = new Prisma.Decimal(dto.quantity);
+    const cost = new Prisma.Decimal(dto.unitCost);
+    const lineTotal = qty.mul(cost).toDecimalPlaces(2);
+    await this.prisma.purchaseOrderLine.update({
+      where: { id: lineId },
+      data: { quantity: qty, unitCost: cost, lineTotal },
+    });
+    await this.recalcOrderTotal(orderId, tenantId);
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.line_update',
+      entityType: 'PurchaseOrder',
+      entityId: orderId,
+      metadata: { lineId },
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
+  async releaseOrder(orderId: string, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    const released = await this.prisma.$transaction(async (tx: PrismaTx) => {
+      const order = await tx.purchaseOrder.findFirst({
+        where: { id: orderId, tenantId },
+        include: { lines: true },
+      });
+      if (!order) {
+        throw new NotFoundException('Pedido de compra não encontrado.');
+      }
+      if (order.status !== DocumentStatus.DRAFT) {
+        throw new BadRequestException('Apenas rascunhos podem ser libertados.');
+      }
+      if (!order.lines.length) {
+        throw new BadRequestException('Pedido sem linhas.');
+      }
+      await this.assertUserCompanyInTx(tx, userId, order.companyId);
+      await this.assertVendor(tx, tenantId, order.vendorId);
+      await tx.purchaseOrder.update({
+        where: { id: order.id },
+        data: { status: DocumentStatus.OPEN },
+      });
+      return { id: order.id, number: order.number };
+    });
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.release',
+      entityType: 'PurchaseOrder',
+      entityId: released.id,
+      metadata: { number: released.number },
+      req,
+    });
+    return this.getOrder(orderId);
   }
 
   async receiveOrder(orderId: string, dto: ReceivePurchaseOrderDto, req?: Request) {
@@ -151,7 +312,54 @@ export class PurchasesService {
     return agg._sum.quantity ?? new Prisma.Decimal(0);
   }
 
-  private async assertVendor(tx: PrismaTx, tenantId: string, vendorId: string) {
+  private async recalcOrderTotal(orderId: string, tenantId: string) {
+    const lines = await this.prisma.purchaseOrderLine.findMany({ where: { orderId } });
+    const sum = lines.reduce((acc, l) => acc.add(l.lineTotal), new Prisma.Decimal(0));
+    await this.prisma.purchaseOrder.update({
+      where: { id: orderId, tenantId },
+      data: { totalAmount: sum },
+    });
+  }
+
+  private async getOrderOrThrow(tenantId: string, orderId: string) {
+    const order = await this.prisma.purchaseOrder.findFirst({ where: { id: orderId, tenantId } });
+    if (!order) {
+      throw new NotFoundException('Pedido de compra não encontrado.');
+    }
+    return order;
+  }
+
+  private async nextOrderNumberInTx(tx: PrismaTx, tenantId: string): Promise<string> {
+    const row = await tx.documentNumberSeries.upsert({
+      where: { tenantId_code: { tenantId, code: 'PURCHASE_ORDER' } },
+      create: { tenantId, code: 'PURCHASE_ORDER', lastNumber: 1 },
+      update: { lastNumber: { increment: 1 } },
+    });
+    return `PC-${String(row.lastNumber).padStart(4, '0')}`;
+  }
+
+  private async assertCompany(tenantId: string, companyId: string) {
+    const c = await this.prisma.company.findFirst({ where: { id: companyId, tenantId } });
+    if (!c) {
+      throw new BadRequestException('Empresa inválida para este tenant.');
+    }
+  }
+
+  private async assertItem(tenantId: string, itemId: string) {
+    const i = await this.prisma.item.findFirst({ where: { id: itemId, tenantId } });
+    if (!i) {
+      throw new BadRequestException('Artigo inválido para este tenant.');
+    }
+  }
+
+  private async assertUserCompany(userId: string, companyId: string) {
+    const link = await this.prisma.userCompany.findFirst({ where: { userId, companyId } });
+    if (!link) {
+      throw new ForbiddenException('Sem acesso a esta empresa.');
+    }
+  }
+
+  private async assertVendor(tx: PrismaTx | PrismaService, tenantId: string, vendorId: string) {
     const vendor = await tx.party.findFirst({
       where: {
         id: vendorId,

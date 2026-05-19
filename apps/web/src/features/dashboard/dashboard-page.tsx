@@ -10,8 +10,14 @@ type MePayload = {
   permissions?: string[];
 };
 
-function unwrapMe(envelope: unknown): MePayload {
-  return ((envelope as { data?: MePayload }).data ?? envelope) as MePayload;
+type FinanceSummary = {
+  chartOfAccountsCount?: number;
+  receivablesOpen?: number;
+  payablesOpen?: number;
+};
+
+function unwrap<T>(envelope: unknown): T {
+  return ((envelope as { data?: T }).data ?? envelope) as T;
 }
 
 export function DashboardPage() {
@@ -20,11 +26,20 @@ export function DashboardPage() {
     queryKey: ['auth-me'],
     queryFn: async () => {
       const { data: res } = await api.get('/auth/me');
-      return unwrapMe(res);
+      return unwrap<MePayload>(res);
     },
   });
 
   const can = (code: string) => Boolean(data?.permissions?.includes(code));
+
+  const financeQ = useQuery({
+    queryKey: ['finance-summary'],
+    enabled: can('finance.read'),
+    queryFn: async () => {
+      const { data: res } = await api.get('/finance/summary');
+      return unwrap<FinanceSummary>(res);
+    },
+  });
 
   return (
     <div className="space-y-6">
@@ -38,11 +53,30 @@ export function DashboardPage() {
         <h3 id="dash-shortcuts-heading" className="sr-only">
           Atalhos de módulos
         </h3>
-        <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-          <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Financeiro</p>
-          <p className="mt-2 text-2xl font-semibold tabular-nums">—</p>
-          <p className="mt-1 text-xs text-slate-500">KPIs em desenvolvimento</p>
-        </div>
+        {can('finance.read') ? (
+          <Link
+            to="/finance"
+            aria-label="Ir para financeiro — resumo"
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700"
+          >
+            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Financeiro</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">
+              {financeQ.isLoading ? '…' : String(financeQ.data?.chartOfAccountsCount ?? 0)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">Contas no plano · resumo e COA</p>
+          </Link>
+        ) : (
+          <div
+            className="rounded-xl border border-dashed border-slate-200 bg-slate-50 p-4 dark:border-slate-700 dark:bg-slate-900/50"
+            role="note"
+            aria-label="Financeiro — sem permissão"
+          >
+            <p className="text-sm font-medium text-slate-500 dark:text-slate-400">Financeiro</p>
+            <p className="mt-2 text-xs text-slate-500">
+              Sem permissão <span className="font-mono">finance.read</span>.
+            </p>
+          </div>
+        )}
         {can('sales.read') ? (
           <Link
             to="/sales"
@@ -84,6 +118,18 @@ export function DashboardPage() {
           </div>
         )}
       </section>
+      {can('purchases.read') ? (
+        <section className="grid gap-4 md:grid-cols-2">
+          <Link
+            to="/purchases"
+            className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition hover:border-blue-300 dark:border-slate-800 dark:bg-slate-900 dark:hover:border-blue-700"
+          >
+            <p className="text-sm font-medium text-blue-700 dark:text-blue-300">Compras</p>
+            <p className="mt-2 text-2xl font-semibold tabular-nums">→</p>
+            <p className="mt-1 text-xs text-slate-500">Pedidos de compra e receção</p>
+          </Link>
+        </section>
+      ) : null}
       <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <p className="text-sm font-medium text-slate-700 dark:text-slate-200">Sessão</p>
         {isLoading ? (

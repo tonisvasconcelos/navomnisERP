@@ -1,5 +1,7 @@
 # Navomnis ERP Audit V6 - V1 Testing Readiness
 
+> **Nota (2026-05):** secções sobre receção de compras em falta foram **supersedidas** por [audit-v8-readiness.md](./audit-v8-readiness.md) (API `POST .../receive` e UI `/purchases`).
+
 Date: 2026-05-15
 
 Scope: complete repository audit for first controlled internal V1 testing release. This V6 audit is based on direct inspection of the real repository, including code, schema, migrations, tests, CI/CD, deployment docs, frontend, mobile wrapper, security posture, ERP functional coverage, and local verification commands.

@@ -43,6 +43,24 @@ const BankingReconciliationPage = lazy(() =>
 const BankingPixPage = lazy(() =>
   import('../features/banking/banking-pix-page').then((m) => ({ default: m.BankingPixPage })),
 );
+const PurchasesListPage = lazy(() =>
+  import('../features/purchases/purchases-list-page').then((m) => ({ default: m.PurchasesListPage })),
+);
+const PurchasesDetailPage = lazy(() =>
+  import('../features/purchases/purchases-detail-page').then((m) => ({
+    default: m.PurchasesDetailPage,
+  })),
+);
+const FinanceDashboardPage = lazy(() =>
+  import('../features/finance/finance-dashboard-page').then((m) => ({
+    default: m.FinanceDashboardPage,
+  })),
+);
+const ChartOfAccountsPage = lazy(() =>
+  import('../features/finance/chart-of-accounts-page').then((m) => ({
+    default: m.ChartOfAccountsPage,
+  })),
+);
 
 function RouteFallback() {
   return (
@@ -76,6 +94,10 @@ export default function App() {
           <Route path="banking/connect" element={<BankingConnectPage />} />
           <Route path="banking/reconciliation" element={<BankingReconciliationPage />} />
           <Route path="banking/pix" element={<BankingPixPage />} />
+          <Route path="purchases" element={<PurchasesListPage />} />
+          <Route path="purchases/:id" element={<PurchasesDetailPage />} />
+          <Route path="finance" element={<FinanceDashboardPage />} />
+          <Route path="finance/accounts" element={<ChartOfAccountsPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

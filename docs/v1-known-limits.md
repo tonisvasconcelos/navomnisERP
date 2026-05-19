@@ -32,7 +32,8 @@ Este documento fixa o que **não** está coberto no slice V1 de vendas/inventár
 
 - Sem documento de transporte, fatura, integração fiscal ou lançamentos GL a partir da libertação.
 - Sem motor financeiro completo, fatura de fornecedor, armazéns múltiplos com regras avançadas.
-- **Receção de compras (slice B):** `POST /purchases/orders/:id/receive` regista entrada positiva no ledger por linha; **sem** lotes/FEFO, custo médio ou fatura; segunda receção além da quantidade pedida é rejeitada.
+- **Receção de compras (slice B):** `POST /purchases/orders/:id/receive` regista entrada positiva no ledger por linha; **UI web** em `/purchases` (lista, detalhe, receção); **sem** lotes/FEFO, custo médio ou fatura; segunda receção além da quantidade pedida é rejeitada.
+- **Financeiro (MVP):** resumo e plano de contas em `/finance`; **sem** lançamentos GL nem AP/AR completos.
 - **MFA:** explicitamente **fora do âmbito** do V1 interno actual; pode entrar no roadmap pós-validação (ver [v1-release-notes-internal.md](./v1-release-notes-internal.md)).
 
 ## Referências
