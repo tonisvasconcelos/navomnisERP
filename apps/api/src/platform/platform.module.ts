@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { CadegModule } from '../modules/cadeg/cadeg.module';
 import { PlatformPrismaService } from '../prisma/platform-prisma.service';
 import { PlatformAuthController } from './auth/platform-auth.controller';
 import { PlatformAuthService } from './auth/platform-auth.service';
@@ -28,6 +29,7 @@ import { NotificationsModule } from '../modules/notifications/notifications.modu
 
 @Module({
   imports: [
+    CadegModule,
     NotificationsModule.forApi(),
     PassportModule.register({ defaultStrategy: 'platform-jwt' }),
     JwtModule.registerAsync({

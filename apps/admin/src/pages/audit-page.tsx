@@ -19,14 +19,16 @@ export function AuditPage() {
       {isLoading ? (
         <p className="text-slate-400">Carregando…</p>
       ) : (
-        <DataTable
+        <DataTable<Log>
           columns={['Ação', 'Entidade', 'Tenant alvo', 'Data']}
-          rows={(data ?? []).map((l) => [
+          rows={data ?? []}
+          rowKey={(l) => `${l.action}-${l.entityType}-${l.createdAt}`}
+          getCells={(l) => [
             l.action,
             l.entityType,
             l.targetTenantId?.slice(0, 8) ?? '—',
             new Date(l.createdAt).toLocaleString('pt-BR'),
-          ])}
+          ]}
         />
       )}
     </div>

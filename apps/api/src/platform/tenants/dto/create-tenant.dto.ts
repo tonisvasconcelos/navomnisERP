@@ -1,6 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TenantStatus } from '@prisma/client';
-import { IsDateString, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
+import { IsBoolean, IsDateString, IsEnum, IsOptional, IsString, Matches, MinLength } from 'class-validator';
 
 export class CreateTenantDto {
   @ApiProperty()
@@ -62,4 +62,23 @@ export class CreateTenantDto {
   @IsOptional()
   @IsString()
   customDomain?: string;
+
+  @ApiPropertyOptional({
+    description: 'Importar cadastros CADEG (artigos, clientes, fornecedores, UOM) dos CSV legados',
+  })
+  @IsOptional()
+  @IsBoolean()
+  provisionCadegMaster?: boolean;
+
+  @ApiPropertyOptional({ description: 'Pasta local com exportar vendas.csv e Exportar compras.csv' })
+  @IsOptional()
+  @IsString()
+  cadegDataDir?: string;
+
+  @ApiPropertyOptional({
+    description: 'Enfileirar histórico de vendas (~80k linhas) para importação transacional',
+  })
+  @IsOptional()
+  @IsBoolean()
+  stageCadegTransactions?: boolean;
 }

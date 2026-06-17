@@ -19,9 +19,11 @@ export function LegalPage() {
       {isLoading ? (
         <p className="text-slate-400">Carregando…</p>
       ) : (
-        <DataTable
+        <DataTable<Doc>
           columns={['Tipo', 'Versão', 'Status', 'Obrigatório']}
-          rows={(data ?? []).map((d) => [d.kind, d.version, d.status, d.isMandatory ? 'Sim' : 'Não'])}
+          rows={data ?? []}
+          rowKey={(d) => `${d.kind}-${d.version}`}
+          getCells={(d) => [d.kind, d.version, d.status, d.isMandatory ? 'Sim' : 'Não']}
         />
       )}
     </div>

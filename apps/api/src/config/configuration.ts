@@ -29,6 +29,9 @@ export const configuration = () => ({
     poApprovalRequiredDefault: process.env.PO_APPROVAL_REQUIRED_DEFAULT ?? 'false',
     fefoSalesDefault: process.env.FEFO_SALES_DEFAULT ?? 'false',
   },
+  cadeg: {
+    dataDir: process.env.CADEG_DATA_DIR ?? '',
+  },
 });
 
 export type AppConfig = ReturnType<typeof configuration>;

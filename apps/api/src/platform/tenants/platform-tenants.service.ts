@@ -1,12 +1,16 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { TenantStatus } from '@prisma/client';
+import { CadegMasterDataService } from '../../modules/cadeg/cadeg-master-data.service';
 import { PlatformPrismaService } from '../../prisma/platform-prisma.service';
 import type { CreateTenantDto } from './dto/create-tenant.dto';
 import type { UpdateTenantDto } from './dto/update-tenant.dto';
 
 @Injectable()
 export class PlatformTenantsService {
-  constructor(private readonly prisma: PlatformPrismaService) {}
+  constructor(
+    private readonly prisma: PlatformPrismaService,
+    private readonly cadeg: CadegMasterDataService,
+  ) {}
 
   list(params: { search?: string; status?: TenantStatus; skip?: number; take?: number }) {
     const where = {
@@ -42,7 +46,7 @@ export class PlatformTenantsService {
   }
 
   async create(dto: CreateTenantDto) {
-    return this.prisma.tenant.create({
+    const tenant = await this.prisma.tenant.create({
       data: {
         slug: dto.slug,
         name: dto.name,
@@ -63,6 +67,15 @@ export class PlatformTenantsService {
       },
       include: { branding: true },
     });
+
+    if (dto.provisionCadegMaster) {
+      await this.cadeg.provisionTenant(tenant.id, {
+        dataDir: dto.cadegDataDir,
+        stageTransactions: dto.stageCadegTransactions ?? false,
+      });
+    }
+
+    return this.get(tenant.id);
   }
 
   async update(id: string, dto: UpdateTenantDto) {

@@ -1,6 +1,8 @@
 import { Body, Controller, Delete, Get, Param, Patch, Post, Query, UseGuards, UseInterceptors } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { TenantStatus } from '@prisma/client';
+import { ProvisionCadegDto } from '../../modules/cadeg/dto/provision-cadeg.dto';
+import { CadegMasterDataService } from '../../modules/cadeg/cadeg-master-data.service';
 import { PlatformPermissions } from '../decorators/platform-permissions.decorator';
 import { PlatformAuditInterceptor } from '../interceptors/platform-audit.interceptor';
 import { PlatformContextInterceptor } from '../interceptors/platform-context.interceptor';
@@ -16,7 +18,10 @@ import { PlatformTenantsService } from './platform-tenants.service';
 @UseGuards(PlatformJwtGuard, PlatformPermissionsGuard)
 @UseInterceptors(PlatformContextInterceptor, PlatformAuditInterceptor)
 export class PlatformTenantsController {
-  constructor(private readonly tenants: PlatformTenantsService) {}
+  constructor(
+    private readonly tenants: PlatformTenantsService,
+    private readonly cadeg: CadegMasterDataService,
+  ) {}
 
   @Get()
   @PlatformPermissions('platform.tenants.read')
@@ -76,6 +81,16 @@ export class PlatformTenantsController {
   @PlatformPermissions('platform.tenants.lifecycle')
   softDelete(@Param('id') id: string) {
     return this.tenants.softDelete(id);
+  }
+
+  @Post(':id/provision/cadeg')
+  @PlatformPermissions('platform.tenants.write')
+  @ApiOperation({ summary: 'Importar master data CADEG (CSV legado) para o tenant' })
+  provisionCadeg(@Param('id') id: string, @Body() dto: ProvisionCadegDto) {
+    return this.cadeg.provisionTenant(id, {
+      dataDir: dto.dataDir,
+      stageTransactions: dto.stageTransactions,
+    });
   }
 
   @Post(':id/restore')
