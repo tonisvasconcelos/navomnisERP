@@ -77,6 +77,13 @@ Para E2E e integração com dados previsíveis (seed demo):
 2. Build do web com `VITE_API_URL=https://<api-staging>/api/v1`.
 3. `pnpm --filter @navomnis/web run test:e2e` (ou workflow manual no GitHub que injete a URL).
 
-## Railway (deploy)
+## CADEG GAP smoke (pós-deploy)
 
-Preferir **integração Git** da Railway com branch `develop` → staging e `main` → produção. O ficheiro [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) contém um gancho opcional por CLI; ajuste o serviço e o projeto antes de confiar no pipeline.
+1. `GET /api/v1/uom/units` — lista KG, UN, CX.
+2. Criar PO → submeter aprovação → aprovar → libertar → receber com lote.
+3. `GET /api/v1/dashboards/operations/summary` — KPIs operacionais.
+4. Upload CSV de vendas via `POST /api/v1/imports/batches` e validar status do lote.
+5. Libertar pedido de venda com flag `FEFO_SALES_DEFAULT=true` quando lotes existirem.
+
+Feature flags tenant (via `TenantFeatureOverride.moduleKey`): `uom_enforcement`, `po_approval_required`, `fefo_sales`.
+

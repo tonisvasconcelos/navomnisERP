@@ -61,6 +61,25 @@ const ChartOfAccountsPage = lazy(() =>
     default: m.ChartOfAccountsPage,
   })),
 );
+const UomMasterPage = lazy(() =>
+  import('../features/uom/uom-master-page').then((m) => ({ default: m.UomMasterPage })),
+);
+const UomExceptionsPage = lazy(() =>
+  import('../features/uom/uom-exceptions-page').then((m) => ({ default: m.UomExceptionsPage })),
+);
+const ApprovalsInboxPage = lazy(() =>
+  import('../features/approvals/approvals-inbox-page').then((m) => ({
+    default: m.ApprovalsInboxPage,
+  })),
+);
+const ImportsWizardPage = lazy(() =>
+  import('../features/imports/imports-wizard-page').then((m) => ({ default: m.ImportsWizardPage })),
+);
+const OperationsDashboardPage = lazy(() =>
+  import('../features/dashboards/operations-dashboard-page').then((m) => ({
+    default: m.OperationsDashboardPage,
+  })),
+);
 
 function RouteFallback() {
   return (
@@ -98,6 +117,11 @@ export default function App() {
           <Route path="purchases/:id" element={<PurchasesDetailPage />} />
           <Route path="finance" element={<FinanceDashboardPage />} />
           <Route path="finance/accounts" element={<ChartOfAccountsPage />} />
+          <Route path="operations" element={<OperationsDashboardPage />} />
+          <Route path="uom" element={<UomMasterPage />} />
+          <Route path="exceptions/uom" element={<UomExceptionsPage />} />
+          <Route path="approvals" element={<ApprovalsInboxPage />} />
+          <Route path="imports" element={<ImportsWizardPage />} />
         </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

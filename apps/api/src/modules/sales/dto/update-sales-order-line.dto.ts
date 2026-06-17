@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class UpdateSalesOrderLineDto {
   @ApiProperty({ example: '2' })
@@ -15,4 +15,9 @@ export class UpdateSalesOrderLineDto {
   @MaxLength(24)
   @Matches(/^\d+(\.\d+)?$/)
   unitPrice!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  transactionUomId?: string;
 }

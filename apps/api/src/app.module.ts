@@ -28,6 +28,11 @@ import { FiscalModule } from './modules/fiscal/fiscal.module';
 import { PostingModule } from './modules/posting/posting.module';
 import { ProduceModule } from './modules/produce/produce.module';
 import { BankingModule } from './modules/banking/banking.module';
+import { FeatureFlagsModule } from './modules/feature-flags/feature-flags.module';
+import { UomModule } from './modules/uom/uom.module';
+import { ApprovalsModule } from './modules/approvals/approvals.module';
+import { DashboardsModule } from './modules/dashboards/dashboards.module';
+import { ImportsModule } from './modules/imports/imports.module';
 
 @Module({
   imports: [
@@ -75,6 +80,11 @@ import { BankingModule } from './modules/banking/banking.module';
     LgpdModule,
     NotificationsModule.forApi(),
     BankingModule,
+    FeatureFlagsModule,
+    UomModule,
+    ApprovalsModule,
+    DashboardsModule,
+    ImportsModule,
     PlatformModule,
     SubscriptionModule,
   ],

@@ -1,9 +1,11 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { DocumentStatus, PartyKind, Prisma } from '@prisma/client';
+import { DocumentStatus, PartyKind, Prisma, ProduceLotStatus } from '@prisma/client';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getTenantContext } from '../../tenant/tenant-storage';
 import { AuditService } from '../audit/audit.service';
+import { TenantFeatureFlagsService } from '../feature-flags/tenant-feature-flags.service';
+import { UomConversionService } from '../uom/uom-conversion.service';
 import type { UpdateSalesOrderLineDto } from './dto/update-sales-order-line.dto';
 
 type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
@@ -13,13 +15,13 @@ export class SalesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly uom: UomConversionService,
+    private readonly flags: TenantFeatureFlagsService,
   ) {}
 
   private ctx() {
     const c = getTenantContext();
-    if (!c) {
-      throw new ForbiddenException('Contexto de tenant ausente.');
-    }
+    if (!c) throw new ForbiddenException('Contexto de tenant ausente.');
     return c;
   }
 
@@ -29,7 +31,10 @@ export class SalesService {
       where: { tenantId },
       orderBy: { orderDate: 'desc' },
       take: 100,
-      include: { customer: true, lines: { include: { item: true } } },
+      include: {
+        customer: true,
+        lines: { include: { item: true, transactionUom: true, baseUom: true, lot: true } },
+      },
     });
   }
 
@@ -37,11 +42,12 @@ export class SalesService {
     const { tenantId } = this.ctx();
     const order = await this.prisma.salesOrder.findFirst({
       where: { id: orderId, tenantId },
-      include: { customer: true, lines: { include: { item: true } } },
+      include: {
+        customer: true,
+        lines: { include: { item: true, transactionUom: true, baseUom: true, lot: true } },
+      },
     });
-    if (!order) {
-      throw new NotFoundException('Pedido não encontrado.');
-    }
+    if (!order) throw new NotFoundException('Pedido não encontrado.');
     return order;
   }
 
@@ -77,7 +83,7 @@ export class SalesService {
 
   async addLine(
     orderId: string,
-    dto: { itemId: string; quantity: string; unitPrice: string },
+    dto: { itemId: string; quantity: string; unitPrice: string; transactionUomId?: string },
     req?: Request,
   ) {
     const { tenantId, userId } = this.ctx();
@@ -86,16 +92,20 @@ export class SalesService {
       throw new BadRequestException('Pedido não está em rascunho.');
     }
     await this.assertItem(tenantId, dto.itemId);
-    const qty = new Prisma.Decimal(dto.quantity);
-    const price = new Prisma.Decimal(dto.unitPrice);
-    const lineTotal = qty.mul(price).toDecimalPlaces(2);
+    const conv = await this.resolveLineConversion(dto.itemId, dto.quantity, dto.transactionUomId);
+    const lineTotal = conv.transactionQuantity.mul(new Prisma.Decimal(dto.unitPrice)).toDecimalPlaces(2);
     await this.prisma.salesOrderLine.create({
       data: {
         orderId: order.id,
         itemId: dto.itemId,
-        quantity: qty,
-        unitPrice: price,
+        quantity: conv.transactionQuantity,
+        unitPrice: new Prisma.Decimal(dto.unitPrice),
         lineTotal,
+        transactionUomId: conv.transactionUomId,
+        baseQuantity: conv.baseQuantity,
+        baseUomId: conv.baseUomId,
+        conversionFactor: conv.conversionFactor,
+        conversionTrace: conv.conversionTrace as Prisma.InputJsonValue,
       },
     });
     await this.recalcOrderTotal(order.id, tenantId);
@@ -108,24 +118,15 @@ export class SalesService {
       metadata: { itemId: dto.itemId },
       req,
     });
-    return this.prisma.salesOrder.findFirstOrThrow({
-      where: { id: order.id, tenantId },
-      include: { lines: { include: { item: true } }, customer: true },
-    });
+    return this.getOrder(orderId);
   }
 
   async removeLine(orderId: string, lineId: string, req?: Request) {
     const { tenantId, userId } = this.ctx();
     const line = await this.prisma.salesOrderLine.findFirst({
-      where: {
-        id: lineId,
-        orderId,
-        order: { tenantId, status: DocumentStatus.DRAFT },
-      },
+      where: { id: lineId, orderId, order: { tenantId, status: DocumentStatus.DRAFT } },
     });
-    if (!line) {
-      throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
-    }
+    if (!line) throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
     await this.prisma.salesOrderLine.delete({ where: { id: lineId } });
     await this.recalcOrderTotal(orderId, tenantId);
     await this.audit.logMutation({
@@ -143,21 +144,23 @@ export class SalesService {
   async updateLine(orderId: string, lineId: string, dto: UpdateSalesOrderLineDto, req?: Request) {
     const { tenantId, userId } = this.ctx();
     const line = await this.prisma.salesOrderLine.findFirst({
-      where: {
-        id: lineId,
-        orderId,
-        order: { tenantId, status: DocumentStatus.DRAFT },
-      },
+      where: { id: lineId, orderId, order: { tenantId, status: DocumentStatus.DRAFT } },
     });
-    if (!line) {
-      throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
-    }
-    const qty = new Prisma.Decimal(dto.quantity);
-    const price = new Prisma.Decimal(dto.unitPrice);
-    const lineTotal = qty.mul(price).toDecimalPlaces(2);
+    if (!line) throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
+    const conv = await this.resolveLineConversion(line.itemId, dto.quantity, dto.transactionUomId);
+    const lineTotal = conv.transactionQuantity.mul(new Prisma.Decimal(dto.unitPrice)).toDecimalPlaces(2);
     await this.prisma.salesOrderLine.update({
       where: { id: lineId },
-      data: { quantity: qty, unitPrice: price, lineTotal },
+      data: {
+        quantity: conv.transactionQuantity,
+        unitPrice: new Prisma.Decimal(dto.unitPrice),
+        lineTotal,
+        transactionUomId: conv.transactionUomId,
+        baseQuantity: conv.baseQuantity,
+        baseUomId: conv.baseUomId,
+        conversionFactor: conv.conversionFactor,
+        conversionTrace: conv.conversionTrace as Prisma.InputJsonValue,
+      },
     });
     await this.recalcOrderTotal(orderId, tenantId);
     await this.audit.logMutation({
@@ -174,52 +177,110 @@ export class SalesService {
 
   async releaseOrder(orderId: string, req?: Request) {
     const { tenantId, userId } = this.ctx();
+    const fefoEnabled = await this.flags.isEnabled(tenantId, 'fefo_sales');
     const released = await this.prisma.$transaction(async (tx: PrismaTx) => {
       const order = await tx.salesOrder.findFirst({
         where: { id: orderId, tenantId },
         include: { lines: true },
       });
-      if (!order) {
-        throw new NotFoundException('Pedido não encontrado.');
-      }
+      if (!order) throw new NotFoundException('Pedido não encontrado.');
       if (order.status !== DocumentStatus.DRAFT) {
         throw new BadRequestException('Apenas rascunhos podem ser libertados.');
       }
-      if (!order.lines.length) {
-        throw new BadRequestException('Pedido sem linhas.');
-      }
+      if (!order.lines.length) throw new BadRequestException('Pedido sem linhas.');
       await this.assertUserCompanyInTx(tx, userId, order.companyId);
 
       const itemIds = [...new Set(order.lines.map((l) => l.itemId))];
       const grouped = await tx.itemLedgerEntry.groupBy({
         by: ['itemId'],
         where: { tenantId, itemId: { in: itemIds } },
-        _sum: { quantity: true },
+        _sum: { baseQuantity: true, quantity: true },
       });
       const balanceBy = new Map(
-        grouped.map((g) => [g.itemId, g._sum.quantity ?? new Prisma.Decimal(0)]),
+        grouped.map((g) => [
+          g.itemId,
+          g._sum.baseQuantity ?? g._sum.quantity ?? new Prisma.Decimal(0),
+        ]),
       );
+
       for (const line of order.lines) {
+        const need = line.baseQuantity ?? line.quantity;
         const available = balanceBy.get(line.itemId) ?? new Prisma.Decimal(0);
-        if (available.lessThan(line.quantity)) {
+        if (available.lessThan(need)) {
           throw new BadRequestException(
-            'Stock insuficiente para libertar o pedido (saldo ledger inferior à quantidade de uma linha).',
+            'Stock insuficiente (UOM base) para libertar o pedido.',
           );
         }
       }
 
       for (const line of order.lines) {
-        await tx.itemLedgerEntry.create({
-          data: {
-            tenantId,
-            itemId: line.itemId,
-            quantity: line.quantity.mul(-1),
-            entryType: 'SALES_RELEASE',
-            documentType: 'SALES_ORDER',
-            documentId: order.id,
-          },
-        });
+        const need = line.baseQuantity ?? line.quantity;
+        let lotId = line.lotId;
+
+        if (fefoEnabled && !lotId) {
+          const lots = await tx.inventoryLot.findMany({
+            where: {
+              tenantId,
+              itemId: line.itemId,
+              status: ProduceLotStatus.AVAILABLE,
+              quantityOnHandKg: { gt: 0 },
+            },
+            orderBy: [{ expirationDate: 'asc' }, { receivedDate: 'asc' }],
+          });
+          let remaining = need;
+          for (const lot of lots) {
+            if (remaining.lte(0)) break;
+            const take = Prisma.Decimal.min(lot.quantityOnHandKg, remaining);
+            await tx.inventoryLot.update({
+              where: { id: lot.id },
+              data: { quantityOnHandKg: lot.quantityOnHandKg.sub(take) },
+            });
+            remaining = remaining.sub(take);
+            lotId = lot.id;
+            await tx.itemLedgerEntry.create({
+              data: {
+                tenantId,
+                itemId: line.itemId,
+                lotId: lot.id,
+                quantity: take.mul(-1),
+                baseQuantity: take.mul(-1),
+                baseUomId: line.baseUomId ?? undefined,
+                entryType: 'SALES_RELEASE',
+                documentType: 'SALES_ORDER',
+                documentId: order.id,
+              },
+            });
+          }
+          if (remaining.gt(0)) {
+            throw new BadRequestException('Stock FEFO insuficiente em lotes.');
+          }
+        } else {
+          await tx.itemLedgerEntry.create({
+            data: {
+              tenantId,
+              itemId: line.itemId,
+              lotId: lotId ?? undefined,
+              quantity: need.mul(-1),
+              baseQuantity: need.mul(-1),
+              transactionUomId: line.transactionUomId ?? undefined,
+              baseUomId: line.baseUomId ?? undefined,
+              conversionFactor: line.conversionFactor ?? undefined,
+              conversionTrace: line.conversionTrace ?? undefined,
+              entryType: 'SALES_RELEASE',
+              documentType: 'SALES_ORDER',
+              documentId: order.id,
+            },
+          });
+        }
+
+        if (fefoEnabled && lotId && lotId !== line.lotId) {
+          await tx.salesOrderLine.update({
+            where: { id: line.id },
+            data: { lotId },
+          });
+        }
       }
+
       await tx.salesOrder.update({
         where: { id: order.id },
         data: { status: DocumentStatus.OPEN },
@@ -237,10 +298,26 @@ export class SalesService {
       req,
     });
 
-    return this.prisma.salesOrder.findFirstOrThrow({
-      where: { id: released.id, tenantId },
-      include: { lines: { include: { item: true } }, customer: true },
-    });
+    return this.getOrder(orderId);
+  }
+
+  private async resolveLineConversion(itemId: string, quantity: string, transactionUomId?: string) {
+    const uomEnforced = await this.flags.isEnabled(this.ctx().tenantId, 'uom_enforcement');
+    if (transactionUomId) {
+      return this.uom.convertItemQuantity({ itemId, quantity, fromUomId: transactionUomId });
+    }
+    if (uomEnforced) {
+      throw new BadRequestException('transactionUomId é obrigatório com UOM enforcement ativo.');
+    }
+    const qty = new Prisma.Decimal(quantity);
+    return {
+      transactionQuantity: qty,
+      transactionUomId: undefined as string | undefined,
+      baseQuantity: qty,
+      baseUomId: undefined as string | undefined,
+      conversionFactor: new Prisma.Decimal(1),
+      conversionTrace: { path: 'legacy' },
+    };
   }
 
   private async recalcOrderTotal(orderId: string, tenantId: string) {
@@ -254,13 +331,11 @@ export class SalesService {
 
   private async getOrderOrThrow(tenantId: string, orderId: string) {
     const order = await this.prisma.salesOrder.findFirst({ where: { id: orderId, tenantId } });
-    if (!order) {
-      throw new NotFoundException('Pedido não encontrado.');
-    }
+    if (!order) throw new NotFoundException('Pedido não encontrado.');
     return order;
   }
 
-  private async nextOrderNumberInTx(tx: PrismaTx, tenantId: string): Promise<string> {
+  private async nextOrderNumberInTx(tx: PrismaTx, tenantId: string) {
     const row = await tx.documentNumberSeries.upsert({
       where: { tenantId_code: { tenantId, code: 'SALES_ORDER' } },
       create: { tenantId, code: 'SALES_ORDER', lastNumber: 1 },
@@ -271,42 +346,28 @@ export class SalesService {
 
   private async assertPartyCustomer(tenantId: string, partyId: string) {
     const p = await this.prisma.party.findFirst({
-      where: {
-        id: partyId,
-        tenantId,
-        kind: { in: [PartyKind.CUSTOMER, PartyKind.BOTH] },
-      },
+      where: { id: partyId, tenantId, kind: { in: [PartyKind.CUSTOMER, PartyKind.BOTH] } },
     });
-    if (!p) {
-      throw new BadRequestException('Cliente inválido para este tenant.');
-    }
+    if (!p) throw new BadRequestException('Cliente inválido para este tenant.');
   }
 
   private async assertCompany(tenantId: string, companyId: string) {
     const c = await this.prisma.company.findFirst({ where: { id: companyId, tenantId } });
-    if (!c) {
-      throw new BadRequestException('Empresa inválida para este tenant.');
-    }
+    if (!c) throw new BadRequestException('Empresa inválida para este tenant.');
   }
 
   private async assertItem(tenantId: string, itemId: string) {
     const i = await this.prisma.item.findFirst({ where: { id: itemId, tenantId } });
-    if (!i) {
-      throw new BadRequestException('Artigo inválido para este tenant.');
-    }
+    if (!i) throw new BadRequestException('Artigo inválido para este tenant.');
   }
 
   private async assertUserCompany(userId: string, companyId: string) {
     const link = await this.prisma.userCompany.findFirst({ where: { userId, companyId } });
-    if (!link) {
-      throw new ForbiddenException('Sem acesso a esta empresa.');
-    }
+    if (!link) throw new ForbiddenException('Sem acesso a esta empresa.');
   }
 
   private async assertUserCompanyInTx(tx: PrismaTx, userId: string, companyId: string) {
     const link = await tx.userCompany.findFirst({ where: { userId, companyId } });
-    if (!link) {
-      throw new ForbiddenException('Sem acesso a esta empresa.');
-    }
+    if (!link) throw new ForbiddenException('Sem acesso a esta empresa.');
   }
 }

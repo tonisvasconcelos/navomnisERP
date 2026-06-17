@@ -33,20 +33,25 @@ export class InventoryService {
     const grouped = await this.prisma.itemLedgerEntry.groupBy({
       by: ['itemId'],
       where: { tenantId: ctx.tenantId },
-      _sum: { quantity: true },
+      _sum: { baseQuantity: true, quantity: true },
     });
     const items = await this.prisma.item.findMany({
       where: { tenantId: ctx.tenantId, isActive: true },
       orderBy: { sku: 'asc' },
       take: 500,
+      include: { baseUomRef: true },
     });
     const sumByItem = new Map(
-      grouped.map((g) => [g.itemId, g._sum.quantity ?? new Prisma.Decimal(0)]),
+      grouped.map((g) => [
+        g.itemId,
+        g._sum.baseQuantity ?? g._sum.quantity ?? new Prisma.Decimal(0),
+      ]),
     );
     return items.map((item) => ({
       itemId: item.id,
       sku: item.sku,
       name: item.name,
+      baseUom: item.baseUomRef?.code ?? item.baseUom,
       quantityOnHand: sumByItem.get(item.id) ?? new Prisma.Decimal(0),
     }));
   }

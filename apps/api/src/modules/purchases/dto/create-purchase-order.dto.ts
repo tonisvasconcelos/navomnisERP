@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreatePurchaseOrderDto {
   @ApiProperty()
@@ -9,6 +9,26 @@ export class CreatePurchaseOrderDto {
   @ApiProperty()
   @IsUUID()
   vendorId!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  expectedDeliveryDate?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  paymentTerms?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  freightTerms?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  buyerNotes?: string;
 }
 
 export class AddPurchaseOrderLineDto {
@@ -29,4 +49,29 @@ export class AddPurchaseOrderLineDto {
   @MaxLength(24)
   @Matches(/^\d+(\.\d+)?$/)
   unitCost!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  transactionUomId?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  packageCount?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  grossWeightKg?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  tareWeightKg?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  netWeightKg?: string;
 }

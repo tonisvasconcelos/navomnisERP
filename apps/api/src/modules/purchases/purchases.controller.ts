@@ -22,6 +22,7 @@ import {
 } from './dto/create-purchase-order.dto';
 import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
+import { ApprovalActionDto } from '../approvals/dto/approval.dto';
 import { PurchasesService } from './purchases.service';
 
 @ApiTags('purchases')
@@ -84,6 +85,43 @@ export class PurchasesController {
     @Req() req: Request,
   ) {
     return this.purchases.removeLine(id, lineId, req);
+  }
+
+  @Post('orders/:id/submit-approval')
+  @RequirePermissions('purchases.write')
+  @ApiOperation({ summary: 'Submeter pedido para aprovação' })
+  submitApproval(@Param('id', ParseUUIDPipe) id: string, @Req() req: Request) {
+    return this.purchases.submitForApproval(id, req);
+  }
+
+  @Post('orders/:id/approve')
+  @RequirePermissions('purchases.write')
+  approve(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApprovalActionDto,
+    @Req() req: Request,
+  ) {
+    return this.purchases.approveOrder(id, dto.comment, req);
+  }
+
+  @Post('orders/:id/reject')
+  @RequirePermissions('purchases.write')
+  reject(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApprovalActionDto,
+    @Req() req: Request,
+  ) {
+    return this.purchases.rejectOrder(id, dto.comment, req);
+  }
+
+  @Post('orders/:id/request-changes')
+  @RequirePermissions('purchases.write')
+  requestChanges(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() dto: ApprovalActionDto,
+    @Req() req: Request,
+  ) {
+    return this.purchases.requestChanges(id, dto.comment, req);
   }
 
   @Post('orders/:id/release')

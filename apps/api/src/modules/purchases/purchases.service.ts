@@ -4,11 +4,20 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { DocumentStatus, PartyKind, Prisma } from '@prisma/client';
+import {
+  DocumentStatus,
+  PartyKind,
+  Prisma,
+  ProduceLotStatus,
+  QualityInspectionStatus,
+} from '@prisma/client';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getTenantContext } from '../../tenant/tenant-storage';
 import { AuditService } from '../audit/audit.service';
+import { ApprovalsService } from '../approvals/approvals.service';
+import { TenantFeatureFlagsService } from '../feature-flags/tenant-feature-flags.service';
+import { UomConversionService } from '../uom/uom-conversion.service';
 import type { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import type { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
 
@@ -19,13 +28,14 @@ export class PurchasesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly uom: UomConversionService,
+    private readonly approvals: ApprovalsService,
+    private readonly flags: TenantFeatureFlagsService,
   ) {}
 
   private ctx() {
     const c = getTenantContext();
-    if (!c) {
-      throw new ForbiddenException('Contexto de tenant ausente.');
-    }
+    if (!c) throw new ForbiddenException('Contexto de tenant ausente.');
     return c;
   }
 
@@ -35,7 +45,10 @@ export class PurchasesService {
       where: { tenantId },
       orderBy: { orderDate: 'desc' },
       take: 100,
-      include: { vendor: true, lines: { include: { item: true } } },
+      include: {
+        vendor: true,
+        lines: { include: { item: true, transactionUom: true, baseUom: true } },
+      },
     });
   }
 
@@ -43,15 +56,27 @@ export class PurchasesService {
     const { tenantId } = this.ctx();
     const order = await this.prisma.purchaseOrder.findFirst({
       where: { id: orderId, tenantId },
-      include: { vendor: true, lines: { include: { item: true } } },
+      include: {
+        vendor: true,
+        lines: { include: { item: true, transactionUom: true, baseUom: true } },
+        purchaseReceipts: { include: { lines: true } },
+      },
     });
-    if (!order) {
-      throw new NotFoundException('Pedido de compra não encontrado.');
-    }
+    if (!order) throw new NotFoundException('Pedido de compra não encontrado.');
     return order;
   }
 
-  async createOrder(dto: { companyId: string; vendorId: string }, req?: Request) {
+  async createOrder(
+    dto: {
+      companyId: string;
+      vendorId: string;
+      expectedDeliveryDate?: string;
+      paymentTerms?: string;
+      freightTerms?: string;
+      buyerNotes?: string;
+    },
+    req?: Request,
+  ) {
     const { tenantId, userId } = this.ctx();
     await this.assertVendor(this.prisma, tenantId, dto.vendorId);
     await this.assertCompany(tenantId, dto.companyId);
@@ -66,6 +91,10 @@ export class PurchasesService {
           number,
           status: DocumentStatus.DRAFT,
           totalAmount: new Prisma.Decimal(0),
+          expectedDeliveryDate: dto.expectedDeliveryDate ? new Date(dto.expectedDeliveryDate) : undefined,
+          paymentTerms: dto.paymentTerms,
+          freightTerms: dto.freightTerms,
+          buyerNotes: dto.buyerNotes,
         },
       });
     });
@@ -83,7 +112,16 @@ export class PurchasesService {
 
   async addLine(
     orderId: string,
-    dto: { itemId: string; quantity: string; unitCost: string },
+    dto: {
+      itemId: string;
+      quantity: string;
+      unitCost: string;
+      transactionUomId?: string;
+      packageCount?: string;
+      grossWeightKg?: string;
+      tareWeightKg?: string;
+      netWeightKg?: string;
+    },
     req?: Request,
   ) {
     const { tenantId, userId } = this.ctx();
@@ -92,7 +130,8 @@ export class PurchasesService {
       throw new BadRequestException('Pedido não está em rascunho.');
     }
     await this.assertItem(tenantId, dto.itemId);
-    const qty = new Prisma.Decimal(dto.quantity);
+    const conv = await this.resolveLineConversion(dto.itemId, dto.quantity, dto.transactionUomId);
+    const qty = conv.transactionQuantity;
     const cost = new Prisma.Decimal(dto.unitCost);
     const lineTotal = qty.mul(cost).toDecimalPlaces(2);
     await this.prisma.purchaseOrderLine.create({
@@ -102,6 +141,15 @@ export class PurchasesService {
         quantity: qty,
         unitCost: cost,
         lineTotal,
+        transactionUomId: conv.transactionUomId,
+        baseQuantity: conv.baseQuantity,
+        baseUomId: conv.baseUomId,
+        conversionFactor: conv.conversionFactor,
+        conversionTrace: conv.conversionTrace as Prisma.InputJsonValue,
+        packageCount: dto.packageCount ? new Prisma.Decimal(dto.packageCount) : undefined,
+        grossWeightKg: dto.grossWeightKg ? new Prisma.Decimal(dto.grossWeightKg) : undefined,
+        tareWeightKg: dto.tareWeightKg ? new Prisma.Decimal(dto.tareWeightKg) : undefined,
+        netWeightKg: dto.netWeightKg ? new Prisma.Decimal(dto.netWeightKg) : undefined,
       },
     });
     await this.recalcOrderTotal(order.id, tenantId);
@@ -120,15 +168,9 @@ export class PurchasesService {
   async removeLine(orderId: string, lineId: string, req?: Request) {
     const { tenantId, userId } = this.ctx();
     const line = await this.prisma.purchaseOrderLine.findFirst({
-      where: {
-        id: lineId,
-        orderId,
-        order: { tenantId, status: DocumentStatus.DRAFT },
-      },
+      where: { id: lineId, orderId, order: { tenantId, status: DocumentStatus.DRAFT } },
     });
-    if (!line) {
-      throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
-    }
+    if (!line) throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
     await this.prisma.purchaseOrderLine.delete({ where: { id: lineId } });
     await this.recalcOrderTotal(orderId, tenantId);
     await this.audit.logMutation({
@@ -146,21 +188,24 @@ export class PurchasesService {
   async updateLine(orderId: string, lineId: string, dto: UpdatePurchaseOrderLineDto, req?: Request) {
     const { tenantId, userId } = this.ctx();
     const line = await this.prisma.purchaseOrderLine.findFirst({
-      where: {
-        id: lineId,
-        orderId,
-        order: { tenantId, status: DocumentStatus.DRAFT },
-      },
+      where: { id: lineId, orderId, order: { tenantId, status: DocumentStatus.DRAFT } },
     });
-    if (!line) {
-      throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
-    }
-    const qty = new Prisma.Decimal(dto.quantity);
+    if (!line) throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
+    const conv = await this.resolveLineConversion(line.itemId, dto.quantity, dto.transactionUomId);
     const cost = new Prisma.Decimal(dto.unitCost);
-    const lineTotal = qty.mul(cost).toDecimalPlaces(2);
+    const lineTotal = conv.transactionQuantity.mul(cost).toDecimalPlaces(2);
     await this.prisma.purchaseOrderLine.update({
       where: { id: lineId },
-      data: { quantity: qty, unitCost: cost, lineTotal },
+      data: {
+        quantity: conv.transactionQuantity,
+        unitCost: cost,
+        lineTotal,
+        transactionUomId: conv.transactionUomId,
+        baseQuantity: conv.baseQuantity,
+        baseUomId: conv.baseUomId,
+        conversionFactor: conv.conversionFactor,
+        conversionTrace: conv.conversionTrace as Prisma.InputJsonValue,
+      },
     });
     await this.recalcOrderTotal(orderId, tenantId);
     await this.audit.logMutation({
@@ -175,22 +220,82 @@ export class PurchasesService {
     return this.getOrder(orderId);
   }
 
+  async submitForApproval(orderId: string, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    await this.approvals.submitPurchaseOrder(orderId, userId);
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.submit_approval',
+      entityType: 'PurchaseOrder',
+      entityId: orderId,
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
+  async approveOrder(orderId: string, comment: string | undefined, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    await this.approvals.actOnPurchaseOrder(orderId, userId, 'APPROVE', { comment });
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.approve',
+      entityType: 'PurchaseOrder',
+      entityId: orderId,
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
+  async rejectOrder(orderId: string, comment: string | undefined, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    await this.approvals.actOnPurchaseOrder(orderId, userId, 'REJECT', { comment });
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.reject',
+      entityType: 'PurchaseOrder',
+      entityId: orderId,
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
+  async requestChanges(orderId: string, comment: string | undefined, req?: Request) {
+    const { tenantId, userId } = this.ctx();
+    await this.approvals.actOnPurchaseOrder(orderId, userId, 'REQUEST_CHANGES', { comment });
+    await this.audit.logMutation({
+      tenantId,
+      actorId: userId,
+      action: 'purchase_order.request_changes',
+      entityType: 'PurchaseOrder',
+      entityId: orderId,
+      req,
+    });
+    return this.getOrder(orderId);
+  }
+
   async releaseOrder(orderId: string, req?: Request) {
     const { tenantId, userId } = this.ctx();
+    const approvalRequired = await this.flags.isEnabled(tenantId, 'po_approval_required');
     const released = await this.prisma.$transaction(async (tx: PrismaTx) => {
       const order = await tx.purchaseOrder.findFirst({
         where: { id: orderId, tenantId },
         include: { lines: true },
       });
-      if (!order) {
-        throw new NotFoundException('Pedido de compra não encontrado.');
+      if (!order) throw new NotFoundException('Pedido de compra não encontrado.');
+      const policy = await this.approvals.findPolicyForPurchaseOrder(tx, tenantId, order);
+      const needsApproval = approvalRequired && Boolean(policy);
+      const allowedStatus = needsApproval ? DocumentStatus.APPROVED : DocumentStatus.DRAFT;
+      if (order.status !== allowedStatus) {
+        throw new BadRequestException(
+          needsApproval
+            ? 'Pedido deve estar aprovado antes de libertar.'
+            : 'Apenas rascunhos podem ser libertados.',
+        );
       }
-      if (order.status !== DocumentStatus.DRAFT) {
-        throw new BadRequestException('Apenas rascunhos podem ser libertados.');
-      }
-      if (!order.lines.length) {
-        throw new BadRequestException('Pedido sem linhas.');
-      }
+      if (!order.lines.length) throw new BadRequestException('Pedido sem linhas.');
       await this.assertUserCompanyInTx(tx, userId, order.companyId);
       await this.assertVendor(tx, tenantId, order.vendorId);
       await tx.purchaseOrder.update({
@@ -218,68 +323,183 @@ export class PurchasesService {
         where: { id: orderId, tenantId },
         include: { lines: true },
       });
-      if (!order) {
-        throw new NotFoundException('Pedido de compra não encontrado.');
-      }
-      if (order.status !== DocumentStatus.OPEN && order.status !== DocumentStatus.RELEASED) {
-        throw new BadRequestException('Apenas pedidos OPEN ou RELEASED podem ser recebidos.');
+      if (!order) throw new NotFoundException('Pedido de compra não encontrado.');
+      if (
+        order.status !== DocumentStatus.OPEN &&
+        order.status !== DocumentStatus.RELEASED &&
+        order.status !== DocumentStatus.PARTIALLY_RECEIVED
+      ) {
+        throw new BadRequestException('Pedido não está aberto para receção.');
       }
       await this.assertUserCompanyInTx(tx, userId, order.companyId);
-      await this.assertVendor(tx, tenantId, order.vendorId);
+
+      const receipt = await tx.purchaseReceipt.create({
+        data: {
+          tenantId,
+          purchaseOrderId: order.id,
+          warehouseId: dto.warehouseId,
+          zoneId: dto.zoneId,
+          receivedById: userId,
+        },
+      });
 
       const lineById = new Map(order.lines.map((l) => [l.id, l]));
-      const receiveByLine = new Map<string, Prisma.Decimal>();
 
       for (const row of dto.lines) {
         const line = lineById.get(row.lineId);
-        if (!line) {
-          throw new BadRequestException(`Linha ${row.lineId} não pertence ao pedido.`);
-        }
-        const qty = new Prisma.Decimal(row.quantity);
-        if (qty.lte(0)) {
-          throw new BadRequestException('Quantidade de receção deve ser positiva.');
-        }
-        const already = await this.receivedQtyForLine(tx, tenantId, line.id);
-        const next = already.add(qty);
-        if (next.gt(line.quantity)) {
-          throw new BadRequestException(
-            `Quantidade excede o pedido na linha ${line.id} (pedido ${line.quantity}, já recebido ${already}).`,
-          );
-        }
-        receiveByLine.set(line.id, qty);
-      }
+        if (!line) throw new BadRequestException(`Linha ${row.lineId} não pertence ao pedido.`);
+        const txQty = new Prisma.Decimal(row.quantity);
+        if (txQty.lte(0)) throw new BadRequestException('Quantidade de receção deve ser positiva.');
 
-      for (const [lineId, qty] of receiveByLine) {
-        const line = lineById.get(lineId)!;
-        await tx.itemLedgerEntry.create({
+        const conv = row.transactionUomId
+          ? await this.uom.convertItemQuantity({
+              itemId: line.itemId,
+              quantity: row.quantity,
+              fromUomId: row.transactionUomId,
+            })
+          : {
+              transactionQuantity: txQty,
+              transactionUomId: line.transactionUomId,
+              baseQuantity: line.baseQuantity
+                ? line.baseQuantity.mul(txQty.div(line.quantity))
+                : txQty,
+              baseUomId: line.baseUomId,
+              conversionFactor: line.conversionFactor ?? new Prisma.Decimal(1),
+              conversionTrace: line.conversionTrace ?? { path: 'line_prorate' },
+            };
+
+        const already = await this.receivedBaseQtyForLine(tx, tenantId, line.id);
+        const lineBase = line.baseQuantity ?? line.quantity;
+        const next = already.add(conv.baseQuantity);
+        if (next.gt(lineBase)) {
+          throw new BadRequestException(`Quantidade excede o pedido na linha ${line.id}.`);
+        }
+
+        let lotId: string | undefined;
+        if (row.lotCode || dto.createLot !== false) {
+          const lotNumber = (row.lotCode ?? `${order.number}-${line.id.slice(0, 8)}`).toUpperCase();
+          const lot = await tx.inventoryLot.create({
+            data: {
+              tenantId,
+              itemId: line.itemId,
+              lotNumber,
+              warehouseId: dto.warehouseId ?? row.warehouseId,
+              zoneId: dto.zoneId ?? row.zoneId,
+              initialQuantityKg: conv.baseQuantity,
+              quantityOnHandKg: conv.baseQuantity,
+              receivedDate: new Date(),
+              expirationDate: row.expirationDate ? new Date(row.expirationDate) : undefined,
+              status: row.createQualityInspection
+                ? ProduceLotStatus.QUARANTINED
+                : ProduceLotStatus.AVAILABLE,
+            },
+          });
+          lotId = lot.id;
+          const costAmount = line.unitCost.mul(conv.transactionQuantity);
+          const valueEntry = await tx.inventoryValueEntry.create({
+            data: {
+              tenantId,
+              itemId: line.itemId,
+              lotId: lot.id,
+              entryType: 'PURCHASE_RECEIVE',
+              quantity: conv.baseQuantity,
+              costAmount,
+              documentType: 'PURCHASE_RECEIPT_LINE',
+              documentId: receipt.id,
+            },
+          });
+          if (row.createQualityInspection) {
+            await tx.qualityInspection.create({
+              data: {
+                tenantId,
+                itemId: line.itemId,
+                lotId: lot.id,
+                purchaseOrderId: order.id,
+                status: QualityInspectionStatus.PENDING,
+                inspectionDate: new Date(),
+                inspectorUserId: userId,
+              },
+            });
+          }
+          await tx.itemLedgerEntry.create({
+            data: {
+              tenantId,
+              itemId: line.itemId,
+              quantity: conv.baseQuantity,
+              baseQuantity: conv.baseQuantity,
+              transactionUomId: conv.transactionUomId ?? undefined,
+              baseUomId: conv.baseUomId ?? undefined,
+              conversionFactor: conv.conversionFactor,
+              conversionTrace: conv.conversionTrace as Prisma.InputJsonValue,
+              lotId: lot.id,
+              warehouseId: dto.warehouseId ?? row.warehouseId,
+              zoneId: dto.zoneId ?? row.zoneId,
+              valueEntryId: valueEntry.id,
+              entryType: 'PURCHASE_RECEIVE',
+              documentType: 'PURCHASE_ORDER_LINE',
+              documentId: line.id,
+              postingDate: new Date(),
+            },
+          });
+        } else {
+          await tx.itemLedgerEntry.create({
+            data: {
+              tenantId,
+              itemId: line.itemId,
+              quantity: conv.baseQuantity,
+              baseQuantity: conv.baseQuantity,
+              transactionUomId: conv.transactionUomId ?? undefined,
+              baseUomId: conv.baseUomId ?? undefined,
+              conversionFactor: conv.conversionFactor,
+              conversionTrace: conv.conversionTrace as Prisma.InputJsonValue,
+              entryType: 'PURCHASE_RECEIVE',
+              documentType: 'PURCHASE_ORDER_LINE',
+              documentId: line.id,
+              postingDate: new Date(),
+            },
+          });
+        }
+
+        await tx.purchaseReceiptLine.create({
           data: {
-            tenantId,
-            itemId: line.itemId,
-            quantity: qty,
-            entryType: 'PURCHASE_RECEIVE',
-            documentType: 'PURCHASE_ORDER_LINE',
-            documentId: lineId,
-            postingDate: new Date(),
+            receiptId: receipt.id,
+            purchaseOrderLineId: line.id,
+            transactionQuantity: conv.transactionQuantity,
+            baseQuantity: conv.baseQuantity,
+            lotId,
+          },
+        });
+
+        await tx.purchaseOrderLine.update({
+          where: { id: line.id },
+          data: {
+            receivedBaseQuantity: next,
           },
         });
       }
 
       const allFullyReceived = await Promise.all(
         order.lines.map(async (line) => {
-          const receivedQty = await this.receivedQtyForLine(tx, tenantId, line.id);
-          return receivedQty.gte(line.quantity);
+          const receivedQty = await this.receivedBaseQtyForLine(tx, tenantId, line.id);
+          const target = line.baseQuantity ?? line.quantity;
+          return receivedQty.gte(target);
         }),
       );
       const fullyReceived = allFullyReceived.every(Boolean);
+      const anyPartial = allFullyReceived.some((v) => !v);
 
-      if (fullyReceived) {
-        await tx.purchaseOrder.update({
-          where: { id: order.id },
-          data: { status: DocumentStatus.POSTED },
-        });
-      }
+      await tx.purchaseOrder.update({
+        where: { id: order.id },
+        data: {
+          status: fullyReceived
+            ? DocumentStatus.RECEIVED
+            : anyPartial
+              ? DocumentStatus.PARTIALLY_RECEIVED
+              : order.status,
+        },
+      });
 
-      return { id: order.id, number: order.number, fullyReceived };
+      return { id: order.id, number: order.number, fullyReceived, receiptId: receipt.id };
     });
 
     await this.audit.logMutation({
@@ -295,11 +515,26 @@ export class PurchasesService {
     return this.getOrder(orderId);
   }
 
-  private async receivedQtyForLine(
-    tx: PrismaTx,
-    tenantId: string,
-    lineId: string,
-  ): Promise<Prisma.Decimal> {
+  private async resolveLineConversion(itemId: string, quantity: string, transactionUomId?: string) {
+    const uomEnforced = await this.flags.isEnabled(this.ctx().tenantId, 'uom_enforcement');
+    if (transactionUomId) {
+      return this.uom.convertItemQuantity({ itemId, quantity, fromUomId: transactionUomId });
+    }
+    if (uomEnforced) {
+      throw new BadRequestException('transactionUomId é obrigatório com UOM enforcement ativo.');
+    }
+    const qty = new Prisma.Decimal(quantity);
+    return {
+      transactionQuantity: qty,
+      transactionUomId: undefined as string | undefined,
+      baseQuantity: qty,
+      baseUomId: undefined as string | undefined,
+      conversionFactor: new Prisma.Decimal(1),
+      conversionTrace: { path: 'legacy' },
+    };
+  }
+
+  private async receivedBaseQtyForLine(tx: PrismaTx, tenantId: string, lineId: string) {
     const agg = await tx.itemLedgerEntry.aggregate({
       where: {
         tenantId,
@@ -307,9 +542,9 @@ export class PurchasesService {
         documentId: lineId,
         entryType: 'PURCHASE_RECEIVE',
       },
-      _sum: { quantity: true },
+      _sum: { baseQuantity: true, quantity: true },
     });
-    return agg._sum.quantity ?? new Prisma.Decimal(0);
+    return agg._sum.baseQuantity ?? agg._sum.quantity ?? new Prisma.Decimal(0);
   }
 
   private async recalcOrderTotal(orderId: string, tenantId: string) {
@@ -323,13 +558,11 @@ export class PurchasesService {
 
   private async getOrderOrThrow(tenantId: string, orderId: string) {
     const order = await this.prisma.purchaseOrder.findFirst({ where: { id: orderId, tenantId } });
-    if (!order) {
-      throw new NotFoundException('Pedido de compra não encontrado.');
-    }
+    if (!order) throw new NotFoundException('Pedido de compra não encontrado.');
     return order;
   }
 
-  private async nextOrderNumberInTx(tx: PrismaTx, tenantId: string): Promise<string> {
+  private async nextOrderNumberInTx(tx: PrismaTx, tenantId: string) {
     const row = await tx.documentNumberSeries.upsert({
       where: { tenantId_code: { tenantId, code: 'PURCHASE_ORDER' } },
       create: { tenantId, code: 'PURCHASE_ORDER', lastNumber: 1 },
@@ -340,42 +573,28 @@ export class PurchasesService {
 
   private async assertCompany(tenantId: string, companyId: string) {
     const c = await this.prisma.company.findFirst({ where: { id: companyId, tenantId } });
-    if (!c) {
-      throw new BadRequestException('Empresa inválida para este tenant.');
-    }
+    if (!c) throw new BadRequestException('Empresa inválida para este tenant.');
   }
 
   private async assertItem(tenantId: string, itemId: string) {
     const i = await this.prisma.item.findFirst({ where: { id: itemId, tenantId } });
-    if (!i) {
-      throw new BadRequestException('Artigo inválido para este tenant.');
-    }
+    if (!i) throw new BadRequestException('Artigo inválido para este tenant.');
   }
 
   private async assertUserCompany(userId: string, companyId: string) {
     const link = await this.prisma.userCompany.findFirst({ where: { userId, companyId } });
-    if (!link) {
-      throw new ForbiddenException('Sem acesso a esta empresa.');
-    }
+    if (!link) throw new ForbiddenException('Sem acesso a esta empresa.');
   }
 
   private async assertVendor(tx: PrismaTx | PrismaService, tenantId: string, vendorId: string) {
     const vendor = await tx.party.findFirst({
-      where: {
-        id: vendorId,
-        tenantId,
-        kind: { in: [PartyKind.SUPPLIER, PartyKind.BOTH] },
-      },
+      where: { id: vendorId, tenantId, kind: { in: [PartyKind.SUPPLIER, PartyKind.BOTH] } },
     });
-    if (!vendor) {
-      throw new BadRequestException('Fornecedor inválido.');
-    }
+    if (!vendor) throw new BadRequestException('Fornecedor inválido.');
   }
 
   private async assertUserCompanyInTx(tx: PrismaTx, userId: string, companyId: string) {
     const link = await tx.userCompany.findFirst({ where: { userId, companyId } });
-    if (!link) {
-      throw new ForbiddenException('Utilizador sem acesso a esta empresa.');
-    }
+    if (!link) throw new ForbiddenException('Utilizador sem acesso a esta empresa.');
   }
 }

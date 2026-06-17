@@ -106,8 +106,20 @@ export function AppShell() {
         to: '/finance/accounts',
       });
     }
-    if (has('audit.read')) {
-      items.push({ id: 'audit', label: 'Auditoria', keywords: 'audit log', to: '/audit' });
+    if (has('master.read')) {
+      items.push({ id: 'uom', label: 'UOM — unidades', keywords: 'uom medida', to: '/uom' });
+      items.push({
+        id: 'ops-dashboard',
+        label: 'Operações CADEG',
+        keywords: 'dashboard operacoes',
+        to: '/operations',
+      });
+    }
+    if (has('approvals.read')) {
+      items.push({ id: 'approvals', label: 'Aprovações', keywords: 'approval inbox', to: '/approvals' });
+    }
+    if (has('master.write')) {
+      items.push({ id: 'imports', label: 'Import CSV', keywords: 'import csv legado', to: '/imports' });
     }
     if (has('fiscal.read')) {
       items.push({ id: 'fiscal', label: 'Fiscal', keywords: 'fiscal nfe', to: '/fiscal' });
@@ -166,6 +178,21 @@ export function AppShell() {
         {can('finance.read') ? (
           <NavLink to="/finance" className={navClass} data-testid="nav-finance">
             Financeiro
+          </NavLink>
+        ) : null}
+        {can('master.read') ? (
+          <NavLink to="/operations" className={navClass}>
+            Operações
+          </NavLink>
+        ) : null}
+        {can('master.read') ? (
+          <NavLink to="/uom" className={navClass}>
+            UOM
+          </NavLink>
+        ) : null}
+        {can('approvals.read') ? (
+          <NavLink to="/approvals" className={navClass}>
+            Aprovações
           </NavLink>
         ) : null}
         {can('audit.read') ? (

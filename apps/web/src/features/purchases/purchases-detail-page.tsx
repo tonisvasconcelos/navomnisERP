@@ -30,7 +30,7 @@ function unwrap<T>(envelope: unknown): T {
 }
 
 function canReceive(status: string) {
-  return status === 'OPEN' || status === 'RELEASED';
+  return status === 'OPEN' || status === 'RELEASED' || status === 'PARTIALLY_RECEIVED';
 }
 
 export function PurchasesDetailPage() {
@@ -137,6 +137,19 @@ export function PurchasesDetailPage() {
     },
     onError: (e: unknown) => {
       setApiError(getApiErrorMessage(e, 'Não foi possível atualizar a linha.'));
+    },
+  });
+
+  const submitApproval = useMutation({
+    mutationFn: async () => {
+      await api.post(`/purchases/orders/${id}/submit-approval`);
+    },
+    onSuccess: async () => {
+      setApiError(null);
+      await qc.invalidateQueries({ queryKey: ['purchase-order', id] });
+    },
+    onError: (e: unknown) => {
+      setApiError(getApiErrorMessage(e, 'Não foi possível submeter para aprovação.'));
     },
   });
 
@@ -381,6 +394,16 @@ export function PurchasesDetailPage() {
 
       <div className="flex flex-wrap gap-3">
         {data?.status === 'DRAFT' && (
+          <button
+            type="button"
+            disabled={submitApproval.isPending || !data.lines.length}
+            onClick={() => submitApproval.mutate()}
+            className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-500 disabled:opacity-50"
+          >
+            Submeter aprovação
+          </button>
+        )}
+        {(data?.status === 'DRAFT' || data?.status === 'APPROVED') && (
           <button
             type="button"
             data-testid="purchase-release"

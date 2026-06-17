@@ -24,6 +24,11 @@ export const configuration = () => ({
       process.env.OF_REDIRECT_URI ?? 'http://localhost:3000/api/v1/banking/oauth/callback',
     encryptionKey: process.env.ENCRYPTION_KEY ?? '',
   },
+  featureFlags: {
+    uomEnforcementDefault: process.env.UOM_ENFORCEMENT_DEFAULT ?? 'false',
+    poApprovalRequiredDefault: process.env.PO_APPROVAL_REQUIRED_DEFAULT ?? 'false',
+    fefoSalesDefault: process.env.FEFO_SALES_DEFAULT ?? 'false',
+  },
 });
 
 export type AppConfig = ReturnType<typeof configuration>;

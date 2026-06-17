@@ -39,6 +39,10 @@ async function main() {
     { code: 'banking.connect', name: 'Open Finance — conectar banco' },
     { code: 'banking.reconcile', name: 'Open Finance — conciliação' },
     { code: 'banking.admin', name: 'Open Finance — administração' },
+    { code: 'approvals.read', name: 'Aprovações — leitura' },
+    { code: 'approvals.configure', name: 'Aprovações — configurar políticas' },
+    { code: 'purchases.submit_approval', name: 'Compras — submeter aprovação' },
+    { code: 'purchases.approve', name: 'Compras — aprovar pedidos' },
   ];
   for (const p of permissions) {
     await prisma.permission.upsert({
@@ -181,6 +185,75 @@ async function main() {
       sku: 'ITEM-001',
       name: 'Item demonstração',
       baseUom: 'UN',
+    },
+  });
+
+  const uomDefs = [
+    { code: 'KG', name: 'Quilograma', kind: 'WEIGHT' as const },
+    { code: 'UN', name: 'Unidade', kind: 'COUNT' as const },
+    { code: 'CX', name: 'Caixa', kind: 'PACKAGE' as const },
+    { code: 'BDJ', name: 'Bandeja', kind: 'TRAY' as const },
+    { code: 'MOL', name: 'Molho', kind: 'BUNCH' as const },
+    { code: 'DZ', name: 'Dúzia', kind: 'DOZEN' as const },
+    { code: 'SC', name: 'Saco', kind: 'SACK' as const },
+    { code: 'PCT', name: 'Pacote', kind: 'PACKAGE' as const },
+  ];
+  for (const d of uomDefs) {
+    await prisma.unitOfMeasure.upsert({
+      where: { tenantId_code: { tenantId: tenant.id, code: d.code } },
+      update: { name: d.name },
+      create: { tenantId: tenant.id, code: d.code, name: d.name, kind: d.kind },
+    });
+  }
+  const unUom = await prisma.unitOfMeasure.findUniqueOrThrow({
+    where: { tenantId_code: { tenantId: tenant.id, code: 'UN' } },
+  });
+  const kgUom = await prisma.unitOfMeasure.findUniqueOrThrow({
+    where: { tenantId_code: { tenantId: tenant.id, code: 'KG' } },
+  });
+  await prisma.item.update({
+    where: { id: item.id },
+    data: { baseUomId: unUom.id },
+  });
+  await prisma.unitOfMeasureAlias.upsert({
+    where: { tenantId_alias: { tenantId: tenant.id, alias: 'Und' } },
+    update: { uomId: unUom.id },
+    create: { tenantId: tenant.id, uomId: unUom.id, alias: 'Und', source: 'seed' },
+  });
+  await prisma.itemUomConversion.upsert({
+    where: {
+      tenantId_itemId_fromUomId_toUomId_validFrom: {
+        tenantId: tenant.id,
+        itemId: item.id,
+        fromUomId: unUom.id,
+        toUomId: kgUom.id,
+        validFrom: new Date('2026-01-01'),
+      },
+    },
+    update: { factor: 1 },
+    create: {
+      tenantId: tenant.id,
+      itemId: item.id,
+      fromUomId: unUom.id,
+      toUomId: kgUom.id,
+      factor: 1,
+      source: 'seed',
+      validFrom: new Date('2026-01-01'),
+    },
+  });
+
+  await prisma.approvalPolicy.upsert({
+    where: { id: '00000000-0000-4000-8000-000000000070' },
+    update: { isActive: true },
+    create: {
+      id: '00000000-0000-4000-8000-000000000070',
+      tenantId: tenant.id,
+      documentType: 'PURCHASE_ORDER',
+      name: 'PO padrão demo',
+      isActive: true,
+      steps: {
+        create: [{ sequence: 1, approverUserId: user.id, minApprovals: 1 }],
+      },
     },
   });
 

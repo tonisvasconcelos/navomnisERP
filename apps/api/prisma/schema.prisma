@@ -94,6 +94,70 @@ enum DocumentStatus {
   RELEASED
   POSTED
   CANCELLED
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  PARTIALLY_RECEIVED
+  RECEIVED
+}
+
+enum UomKind {
+  WEIGHT
+  COUNT
+  PACKAGE
+  BUNCH
+  TRAY
+  SACK
+  DOZEN
+  VOLUME
+  OTHER
+}
+
+enum UomRoundingMode {
+  HALF_UP
+  HALF_DOWN
+  CEIL
+  FLOOR
+  NONE
+}
+
+enum ApprovalDocumentType {
+  PURCHASE_ORDER
+  SALES_ORDER
+}
+
+enum ApprovalInstanceStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CHANGES_REQUESTED
+  CANCELLED
+}
+
+enum ApprovalActionType {
+  SUBMIT
+  APPROVE
+  REJECT
+  REQUEST_CHANGES
+  CANCEL
+  ESCALATE
+}
+
+enum ImportBatchStatus {
+  UPLOADED
+  PARSING
+  VALIDATING
+  READY_TO_COMMIT
+  COMMITTED
+  FAILED
+}
+
+enum ImportRowStatus {
+  PENDING
+  VALID
+  ERROR
+  SKIPPED
+  COMMITTED
 }
 
 enum NotificationChannel {
@@ -409,6 +473,17 @@ model Tenant {
   reconciliationRules      ReconciliationRule[]
   reconciliationMatches    ReconciliationMatch[]
   bankingAccessLogs        BankingAccessLog[]
+  unitsOfMeasure           UnitOfMeasure[]
+  uomAliases               UnitOfMeasureAlias[]
+  itemUomConversions       ItemUomConversion[]
+  supplierItemUoms         SupplierItemUom[]
+  customerItemUoms         CustomerItemUom[]
+  approvalPolicies         ApprovalPolicy[]
+  approvalInstances        ApprovalInstance[]
+  purchaseReceipts         PurchaseReceipt[]
+  landedCostAllocationLines LandedCostAllocationLine[]
+  importBatches            ImportBatch[]
+  uomConversionExceptions  UomConversionException[]
 }
 
 model DocumentNumberSeries {
@@ -658,6 +733,8 @@ model Party {
   supplierLedgerEntries SupplierLedgerEntry[]
   producedItemProfiles  AgriculturalItemProfile[] @relation("AgriculturalProducer")
   producedLots          InventoryLot[]            @relation("LotProducer")
+  supplierItemUoms      SupplierItemUom[]
+  customerItemUoms      CustomerItemUom[]
 
   @@index([tenantId, kind, name])
 }
@@ -668,6 +745,7 @@ model Item {
   sku                  String
   name                 String
   baseUom              String    @default("UN")
+  baseUomId            String?
   isActive             Boolean   @default(true)
   createdAt            DateTime  @default(now())
   updatedAt            DateTime  @updatedAt
@@ -677,6 +755,10 @@ model Item {
 
   tenant                Tenant                   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   itemFiscalTemplate    ItemFiscalTemplate?      @relation(fields: [itemFiscalTemplateId], references: [id], onDelete: SetNull)
+  baseUomRef            UnitOfMeasure?           @relation("ItemBaseUom", fields: [baseUomId], references: [id], onDelete: SetNull)
+  uomConversions        ItemUomConversion[]
+  supplierItemUoms      SupplierItemUom[]
+  customerItemUoms      CustomerItemUom[]
   ledger                ItemLedgerEntry[]
   salesLines            SalesOrderLine[]
   purchaseLines         PurchaseOrderLine[]
@@ -755,9 +837,15 @@ model SalesOrderLine {
   itemId        String
   quantity      Decimal  @db.Decimal(18, 4)
   unitPrice     Decimal  @db.Decimal(18, 4)
-  lineTotal     Decimal  @db.Decimal(18, 2)
-  lotId         String?
-  packageTypeId String?
+  lineTotal         Decimal  @db.Decimal(18, 2)
+  transactionUomId  String?
+  baseQuantity      Decimal? @db.Decimal(18, 4)
+  baseUomId         String?
+  conversionFactor  Decimal? @db.Decimal(18, 8)
+  conversionTrace   Json?
+  packageCount      Decimal? @db.Decimal(18, 4)
+  lotId             String?
+  packageTypeId     String?
   grossWeightKg Decimal? @db.Decimal(18, 4)
   tareWeightKg  Decimal? @db.Decimal(18, 4)
   netWeightKg   Decimal? @db.Decimal(18, 4)
@@ -765,6 +853,8 @@ model SalesOrderLine {
 
   order       SalesOrder     @relation(fields: [orderId], references: [id], onDelete: Cascade)
   item        Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  transactionUom UnitOfMeasure? @relation("SalesLineTransactionUom", fields: [transactionUomId], references: [id], onDelete: SetNull)
+  baseUom     UnitOfMeasure? @relation("SalesLineBaseUom", fields: [baseUomId], references: [id], onDelete: SetNull)
   lot         InventoryLot?  @relation(fields: [lotId], references: [id], onDelete: Restrict)
   packageType PackagingType? @relation(fields: [packageTypeId], references: [id], onDelete: Restrict)
 
@@ -781,6 +871,12 @@ model PurchaseOrder {
   status      DocumentStatus @default(DRAFT)
   orderDate   DateTime       @default(now())
   totalAmount Decimal        @default(0) @db.Decimal(18, 2)
+  expectedDeliveryDate DateTime?
+  paymentTerms         String?
+  freightTerms         String?
+  buyerNotes           String?
+  submittedAt          DateTime?
+  approvedAt           DateTime?
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
   version     Int            @default(1)
@@ -791,6 +887,7 @@ model PurchaseOrder {
   lines                 PurchaseOrderLine[]
   qualityInspections    QualityInspection[]
   landedCostAllocations LandedCostAllocation[]
+  purchaseReceipts      PurchaseReceipt[]
 
   @@unique([tenantId, number])
   @@index([tenantId, vendorId, orderDate])
@@ -804,6 +901,14 @@ model PurchaseOrderLine {
   quantity           Decimal  @db.Decimal(18, 4)
   unitCost           Decimal  @db.Decimal(18, 4)
   lineTotal          Decimal  @db.Decimal(18, 2)
+  transactionUomId   String?
+  baseQuantity       Decimal? @db.Decimal(18, 4)
+  baseUomId          String?
+  conversionFactor   Decimal? @db.Decimal(18, 8)
+  conversionTrace    Json?
+  packageCount       Decimal? @db.Decimal(18, 4)
+  receivedBaseQuantity Decimal? @db.Decimal(18, 4)
+  costUomId          String?
   lotId              String?
   packageTypeId      String?
   grossWeightKg      Decimal? @db.Decimal(18, 4)
@@ -814,9 +919,12 @@ model PurchaseOrderLine {
   handlingCostAmount Decimal  @default(0) @db.Decimal(18, 2)
   landedCostAmount   Decimal  @default(0) @db.Decimal(18, 2)
 
-  order       PurchaseOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  item        Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
-  lot         InventoryLot?  @relation(fields: [lotId], references: [id], onDelete: Restrict)
+  order           PurchaseOrder  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  item            Item           @relation(fields: [itemId], references: [id], onDelete: Restrict)
+  transactionUom  UnitOfMeasure? @relation("PurchaseLineTransactionUom", fields: [transactionUomId], references: [id], onDelete: SetNull)
+  baseUom         UnitOfMeasure? @relation("PurchaseLineBaseUom", fields: [baseUomId], references: [id], onDelete: SetNull)
+  costUom         UnitOfMeasure? @relation("PurchaseLineCostUom", fields: [costUomId], references: [id], onDelete: SetNull)
+  lot             InventoryLot?  @relation(fields: [lotId], references: [id], onDelete: Restrict)
   packageType PackagingType? @relation(fields: [packageTypeId], references: [id], onDelete: Restrict)
 
   @@index([orderId])
@@ -827,8 +935,13 @@ model ItemLedgerEntry {
   id           String   @id @default(uuid())
   tenantId     String
   itemId       String
-  quantity     Decimal  @db.Decimal(18, 4)
-  lotId        String?
+  quantity          Decimal  @db.Decimal(18, 4)
+  baseQuantity      Decimal? @db.Decimal(18, 4)
+  transactionUomId  String?
+  baseUomId         String?
+  conversionFactor  Decimal? @db.Decimal(18, 8)
+  conversionTrace   Json?
+  lotId             String?
   warehouseId  String?
   zoneId       String?
   valueEntryId String?
@@ -840,6 +953,8 @@ model ItemLedgerEntry {
 
   tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   item       Item                 @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  transactionUom UnitOfMeasure?   @relation("LedgerTransactionUom", fields: [transactionUomId], references: [id], onDelete: SetNull)
+  baseUom    UnitOfMeasure?       @relation("LedgerBaseUom", fields: [baseUomId], references: [id], onDelete: SetNull)
   lot        InventoryLot?        @relation(fields: [lotId], references: [id], onDelete: Restrict)
   warehouse  Warehouse?           @relation(fields: [warehouseId], references: [id], onDelete: Restrict)
   zone       WarehouseZone?       @relation(fields: [zoneId], references: [id], onDelete: Restrict)
@@ -1815,6 +1930,7 @@ model LandedCostAllocation {
 
   tenant        Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: SetNull)
+  lines         LandedCostAllocationLine[]
 
   @@index([tenantId, purchaseOrderId, status])
 }
@@ -2811,4 +2927,289 @@ model DataRetentionPolicy {
   description   String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
+}
+
+// --- CADEG UOM, approvals, imports, receipts ---
+
+model UnitOfMeasure {
+  id              String   @id @default(uuid())
+  tenantId        String
+  code            String
+  name            String
+  kind            UomKind  @default(OTHER)
+  decimalScale    Int      @default(3)
+  isFiscalAllowed Boolean  @default(true)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tenant                  Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  aliases                 UnitOfMeasureAlias[]
+  itemsAsBase             Item[]              @relation("ItemBaseUom")
+  conversionsFrom         ItemUomConversion[] @relation("ConversionFrom")
+  conversionsTo           ItemUomConversion[] @relation("ConversionTo")
+  supplierPurchaseUoms    SupplierItemUom[]   @relation("SupplierPurchaseUom")
+  supplierCostUoms        SupplierItemUom[]   @relation("SupplierCostUom")
+  customerSaleUoms        CustomerItemUom[]   @relation("CustomerSaleUom")
+  customerPriceUoms       CustomerItemUom[]   @relation("CustomerPriceUom")
+  salesLineTransaction    SalesOrderLine[]    @relation("SalesLineTransactionUom")
+  salesLineBase           SalesOrderLine[]    @relation("SalesLineBaseUom")
+  purchaseLineTransaction PurchaseOrderLine[] @relation("PurchaseLineTransactionUom")
+  purchaseLineBase        PurchaseOrderLine[] @relation("PurchaseLineBaseUom")
+  purchaseLineCost        PurchaseOrderLine[] @relation("PurchaseLineCostUom")
+  ledgerTransaction       ItemLedgerEntry[]   @relation("LedgerTransactionUom")
+  ledgerBase              ItemLedgerEntry[]   @relation("LedgerBaseUom")
+
+  @@unique([tenantId, code])
+  @@index([tenantId, isActive])
+}
+
+model UnitOfMeasureAlias {
+  id        String   @id @default(uuid())
+  tenantId  String
+  uomId     String
+  alias     String
+  source    String   @default("manual")
+  createdAt DateTime @default(now())
+
+  tenant Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  uom    UnitOfMeasure @relation(fields: [uomId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, alias])
+  @@index([tenantId, uomId])
+}
+
+model ItemUomConversion {
+  id           String          @id @default(uuid())
+  tenantId     String
+  itemId       String
+  fromUomId    String
+  toUomId      String
+  factor       Decimal         @db.Decimal(18, 8)
+  roundingMode UomRoundingMode @default(HALF_UP)
+  validFrom    DateTime        @default(now())
+  validTo      DateTime?
+  source       String          @default("manual")
+  createdAt    DateTime        @default(now())
+
+  tenant  Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item    Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  fromUom UnitOfMeasure @relation("ConversionFrom", fields: [fromUomId], references: [id], onDelete: Restrict)
+  toUom   UnitOfMeasure @relation("ConversionTo", fields: [toUomId], references: [id], onDelete: Restrict)
+
+  @@unique([tenantId, itemId, fromUomId, toUomId, validFrom])
+  @@index([tenantId, itemId])
+}
+
+model SupplierItemUom {
+  id                 String   @id @default(uuid())
+  tenantId           String
+  supplierId         String
+  itemId             String
+  supplierSku        String?
+  purchaseUomId      String
+  unitsPerPack       Decimal? @db.Decimal(18, 6)
+  minOrderQty        Decimal? @db.Decimal(18, 4)
+  leadTimeDays       Int?
+  preferredCostUomId String?
+  createdAt          DateTime @default(now())
+
+  tenant           Tenant        @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  supplier         Party         @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  item             Item          @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  purchaseUom      UnitOfMeasure @relation("SupplierPurchaseUom", fields: [purchaseUomId], references: [id], onDelete: Restrict)
+  preferredCostUom UnitOfMeasure? @relation("SupplierCostUom", fields: [preferredCostUomId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, supplierId, itemId])
+}
+
+model CustomerItemUom {
+  id           String   @id @default(uuid())
+  tenantId     String
+  customerId   String
+  itemId       String
+  customerSku  String?
+  saleUomId    String
+  priceUomId   String?
+  createdAt    DateTime @default(now())
+
+  tenant    Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  customer  Party          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  item      Item           @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  saleUom   UnitOfMeasure  @relation("CustomerSaleUom", fields: [saleUomId], references: [id], onDelete: Restrict)
+  priceUom  UnitOfMeasure? @relation("CustomerPriceUom", fields: [priceUomId], references: [id], onDelete: SetNull)
+
+  @@unique([tenantId, customerId, itemId])
+}
+
+model ApprovalPolicy {
+  id           String               @id @default(uuid())
+  tenantId     String
+  companyId    String?
+  documentType ApprovalDocumentType
+  name         String
+  isActive     Boolean              @default(true)
+  minAmount    Decimal?             @db.Decimal(18, 2)
+  maxAmount    Decimal?             @db.Decimal(18, 2)
+  vendorId     String?
+  categoryCode String?
+  validFrom    DateTime             @default(now())
+  validTo      DateTime?
+  createdAt    DateTime             @default(now())
+
+  tenant Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  steps  ApprovalPolicyStep[]
+
+  @@index([tenantId, documentType, isActive])
+}
+
+model ApprovalPolicyStep {
+  id              String @id @default(uuid())
+  policyId        String
+  sequence        Int
+  approverRoleId  String?
+  approverUserId  String?
+  minApprovals    Int    @default(1)
+  escalationHours Int?
+
+  policy ApprovalPolicy @relation(fields: [policyId], references: [id], onDelete: Cascade)
+
+  @@index([policyId, sequence])
+}
+
+model ApprovalInstance {
+  id            String                 @id @default(uuid())
+  tenantId      String
+  documentType  ApprovalDocumentType
+  documentId    String
+  policyId      String?
+  currentStep   Int                    @default(1)
+  status        ApprovalInstanceStatus @default(PENDING)
+  requestedById String
+  requestedAt   DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
+
+  tenant  Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  actions ApprovalAction[]
+
+  @@unique([tenantId, documentType, documentId])
+  @@index([tenantId, status])
+}
+
+model ApprovalAction {
+  id         String             @id @default(uuid())
+  instanceId String
+  action     ApprovalActionType
+  actorId    String
+  comment    String?
+  fromStatus String?
+  toStatus   String?
+  createdAt  DateTime           @default(now())
+
+  instance ApprovalInstance @relation(fields: [instanceId], references: [id], onDelete: Cascade)
+
+  @@index([instanceId, createdAt])
+}
+
+model PurchaseReceipt {
+  id              String   @id @default(uuid())
+  tenantId        String
+  purchaseOrderId String
+  receivedAt      DateTime @default(now())
+  warehouseId     String?
+  zoneId          String?
+  receivedById    String?
+  status          String   @default("POSTED")
+  createdAt       DateTime @default(now())
+
+  tenant        Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  purchaseOrder PurchaseOrder       @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  lines         PurchaseReceiptLine[]
+
+  @@index([tenantId, purchaseOrderId])
+}
+
+model PurchaseReceiptLine {
+  id                 String  @id @default(uuid())
+  receiptId          String
+  purchaseOrderLineId String
+  transactionQuantity Decimal @db.Decimal(18, 4)
+  baseQuantity       Decimal @db.Decimal(18, 4)
+  lotId              String?
+  qualityInspectionId String?
+
+  receipt PurchaseReceipt @relation(fields: [receiptId], references: [id], onDelete: Cascade)
+
+  @@index([receiptId])
+}
+
+model LandedCostAllocationLine {
+  id            String  @id @default(uuid())
+  tenantId      String
+  allocationId  String
+  orderLineId   String
+  freightAmount Decimal @default(0) @db.Decimal(18, 2)
+  handlingAmount Decimal @default(0) @db.Decimal(18, 2)
+
+  tenant     Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  allocation LandedCostAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+
+  @@index([allocationId])
+}
+
+model ImportBatch {
+  id             String            @id @default(uuid())
+  tenantId       String
+  companyId      String
+  sourceSystem   String            @default("legacy_erp")
+  fileName       String
+  fileType       String
+  encoding       String            @default("cp1252")
+  delimiter      String            @default(";")
+  status         ImportBatchStatus @default(UPLOADED)
+  idempotencyKey String
+  rowCount       Int               @default(0)
+  errorCount     Int               @default(0)
+  committedAt    DateTime?
+  createdAt      DateTime          @default(now())
+
+  tenant Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  rows   ImportRow[]
+
+  @@unique([tenantId, idempotencyKey])
+  @@index([tenantId, status])
+}
+
+model ImportRow {
+  id             String          @id @default(uuid())
+  batchId        String
+  rowNumber      Int
+  rawPayload     Json
+  status         ImportRowStatus @default(PENDING)
+  errors         Json?
+  matchedItemId  String?
+  matchedPartyId String?
+  resolvedUomId  String?
+  idempotencyKey String
+  createdAt      DateTime        @default(now())
+
+  batch ImportBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  @@unique([batchId, idempotencyKey])
+  @@index([batchId, status])
+}
+
+model UomConversionException {
+  id        String   @id @default(uuid())
+  tenantId  String
+  itemId    String?
+  context   String
+  message   String
+  payload   Json?
+  resolved  Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, resolved, createdAt])
 }

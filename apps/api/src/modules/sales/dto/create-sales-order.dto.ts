@@ -1,5 +1,5 @@
-import { ApiProperty } from '@nestjs/swagger';
-import { IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { IsOptional, IsString, IsUUID, Matches, MaxLength, MinLength } from 'class-validator';
 
 export class CreateSalesOrderDto {
   @ApiProperty()
@@ -29,4 +29,9 @@ export class AddSalesOrderLineDto {
   @MaxLength(24)
   @Matches(/^\d+(\.\d+)?$/)
   unitPrice!: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsUUID()
+  transactionUomId?: string;
 }
