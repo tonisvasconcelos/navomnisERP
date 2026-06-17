@@ -26,5 +26,4 @@ ALTER TABLE "UserInvite" ADD CONSTRAINT "UserInvite_userId_fkey" FOREIGN KEY ("u
 -- AddForeignKey
 ALTER TABLE "UserInvite" ADD CONSTRAINT "UserInvite_tenantId_fkey" FOREIGN KEY ("tenantId") REFERENCES "Tenant"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
--- AddForeignKey
-ALTER TABLE "UserInvite" ADD CONSTRAINT "UserInvite_invitedById_fkey" FOREIGN KEY ("invitedById") REFERENCES "PlatformOperator"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- UserInvite_invitedById_fkey added in 20260517000000_platform_saas_admin after PlatformOperator exists
