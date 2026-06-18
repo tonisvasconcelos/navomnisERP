@@ -252,7 +252,7 @@ export function AppShell() {
             </button>
           </div>
         </aside>
-        <div className="flex flex-1 flex-col">
+        <div className="flex min-w-0 flex-1 flex-col">
           <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
               <button
@@ -270,7 +270,10 @@ export function AppShell() {
                 </kbd>{' '}
                 — paleta de comandos
               </button>
-              <nav className="flex gap-1 md:hidden" aria-label="Navegação principal">
+              <nav
+                className="flex max-w-full min-w-0 gap-1 overflow-x-auto pb-1 md:hidden"
+                aria-label="Navegação principal"
+              >
                 <NavLink to="/" end className={navClass}>
                   Painel
                 </NavLink>
