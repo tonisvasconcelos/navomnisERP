@@ -3,11 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/shared/api/client';
 import { getApiErrorMessage } from '@/shared/api/errors';
+import { formatCurrencyBrl, formatDatePt } from '@/shared/format/document';
 
 type PurchaseOrderRow = {
   id: string;
   number: string;
   status: string;
+  orderDate?: string;
   totalAmount: unknown;
   vendor?: { name: string };
 };
@@ -235,6 +237,7 @@ export function PurchasesListPage() {
             <tr>
               <th className="px-4 py-3">Número</th>
               <th className="px-4 py-3">Fornecedor</th>
+              <th className="px-4 py-3">Emissão</th>
               <th className="px-4 py-3">Estado</th>
               <th className="px-4 py-3 text-right">Total</th>
             </tr>
@@ -242,19 +245,19 @@ export function PurchasesListPage() {
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
                   A carregar…
                 </td>
               </tr>
             ) : !data?.length ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
                   Sem pedidos. Crie um rascunho ou use o seed PC-0001.
                 </td>
               </tr>
             ) : !visibleOrders.length ? (
               <tr>
-                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={5} className="px-4 py-6 text-center text-slate-500">
                   Nenhum pedido corresponde aos filtros.
                 </td>
               </tr>
@@ -267,9 +270,10 @@ export function PurchasesListPage() {
                     </Link>
                   </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{o.vendor?.name ?? '—'}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDatePt(o.orderDate)}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{o.status}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
-                    {String(o.totalAmount ?? '0')}
+                    {formatCurrencyBrl(o.totalAmount)}
                   </td>
                 </tr>
               ))

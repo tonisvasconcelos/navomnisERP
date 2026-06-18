@@ -5,18 +5,37 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { useForm } from 'react-hook-form';
 import { api } from '@/shared/api/client';
 import { ConfirmDialog } from '@/widgets/confirm-dialog';
+import { DocumentHeaderCard } from '@/widgets/document-header-card';
+import { buildSalesHeaderFields, formatCurrencyBrl } from '@/shared/format/document-header-fields';
 
 type OrderDetail = {
   id: string;
   number: string;
   status: string;
   totalAmount: unknown;
-  customer?: { name: string };
+  invoiceNumber?: string | null;
+  orderDate?: string;
+  shippedAt?: string | null;
+  invoicedAt?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  deliveryDate?: string | null;
+  warehouseCode?: string | null;
+  warehouseName?: string | null;
+  saleType?: string | null;
+  salesRep?: string | null;
+  enteredBy?: string | null;
+  externalOrderRef?: string | null;
+  cfop?: string | null;
+  fiscalKey?: string | null;
+  legacyMetadata?: Record<string, unknown> | null;
+  customer?: { name: string; taxId?: string | null };
   lines: {
     id: string;
     quantity: unknown;
     unitPrice: unknown;
     lineTotal: unknown;
+    transactionUom?: { code: string } | null;
     item: { sku: string; name: string };
   }[];
 };
@@ -159,15 +178,26 @@ export function SalesDetailPage() {
         >
           ← Voltar à lista
         </button>
-        <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white" data-testid="sales-order-title">
-          {isLoading ? 'A carregar…' : data?.number ?? 'Pedido'}
-        </h2>
-        {data && (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {data.customer?.name} · <span data-testid="sales-order-status">{data.status}</span>
-          </p>
-        )}
       </div>
+
+      {data && (
+        <DocumentHeaderCard
+          title={data.number}
+          subtitle={data.customer?.name}
+          status={data.status}
+          totalAmount={data.totalAmount}
+          fields={buildSalesHeaderFields(data)}
+          legacyMetadata={data.legacyMetadata}
+          titleTestId="sales-order-title"
+          statusTestId="sales-order-status"
+        />
+      )}
+
+      {!data && (
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white" data-testid="sales-order-title">
+          {isLoading ? 'A carregar…' : 'Pedido'}
+        </h2>
+      )}
 
       {apiError && (
         <p
@@ -247,6 +277,7 @@ export function SalesDetailPage() {
             <tr>
               <th className="px-4 py-3">SKU</th>
               <th className="px-4 py-3">Artigo</th>
+              <th className="px-4 py-3">UOM</th>
               <th className="px-4 py-3 text-right">Qtd</th>
               <th className="px-4 py-3 text-right">Preço</th>
               <th className="px-4 py-3 text-right">Total linha</th>
@@ -256,7 +287,7 @@ export function SalesDetailPage() {
           <tbody>
             {!data?.lines?.length ? (
               <tr>
-                <td colSpan={data?.status === 'DRAFT' ? 6 : 5} className="px-4 py-4 text-center text-slate-500">
+                <td colSpan={data?.status === 'DRAFT' ? 7 : 6} className="px-4 py-4 text-center text-slate-500">
                   Sem linhas.
                 </td>
               </tr>
@@ -267,6 +298,7 @@ export function SalesDetailPage() {
                   <tr key={l.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                     <td className="px-4 py-3">{l.item.sku}</td>
                     <td className="px-4 py-3">{l.item.name}</td>
+                    <td className="px-4 py-3 text-slate-500">{l.transactionUom?.code ?? '—'}</td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {editing ? (
                         <input
@@ -288,10 +320,10 @@ export function SalesDetailPage() {
                           onChange={(e) => setEditPrice(e.target.value)}
                         />
                       ) : (
-                        String(l.unitPrice)
+                        formatCurrencyBrl(l.unitPrice)
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{String(l.lineTotal)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrencyBrl(l.lineTotal)}</td>
                     {data.status === 'DRAFT' ? (
                       <td className="px-4 py-3 text-right">
                         {editing ? (

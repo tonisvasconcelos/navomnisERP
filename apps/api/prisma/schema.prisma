@@ -808,17 +808,37 @@ model GlEntry {
 }
 
 model SalesOrder {
-  id          String         @id @default(uuid())
-  tenantId    String
-  companyId   String
-  customerId  String
-  number      String
-  status      DocumentStatus @default(DRAFT)
-  orderDate   DateTime       @default(now())
-  totalAmount Decimal        @default(0) @db.Decimal(18, 2)
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  version     Int            @default(1)
+  id                 String         @id @default(uuid())
+  tenantId           String
+  companyId          String
+  customerId         String
+  number             String
+  status             DocumentStatus @default(DRAFT)
+  orderDate          DateTime       @default(now())
+  totalAmount        Decimal        @default(0) @db.Decimal(18, 2)
+  invoiceNumber      String?
+  shippedAt          DateTime?
+  invoicedAt         DateTime?
+  dueDate            DateTime?
+  paidAt             DateTime?
+  deliveryDate       DateTime?
+  warehouseCode      String?
+  warehouseName      String?
+  saleType           String?
+  salesRep           String?
+  enteredBy          String?
+  externalOrderRef   String?
+  cfop               String?
+  taxSituation       String?
+  fiscalKey          String?
+  freightAmount      Decimal?       @db.Decimal(18, 2)
+  insuranceAmount    Decimal?       @db.Decimal(18, 2)
+  discountAmount     Decimal?       @db.Decimal(18, 2)
+  otherAmount        Decimal?       @db.Decimal(18, 2)
+  legacyMetadata     Json?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+  version            Int            @default(1)
 
   tenant   Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   company  Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -863,23 +883,43 @@ model SalesOrderLine {
 }
 
 model PurchaseOrder {
-  id          String         @id @default(uuid())
-  tenantId    String
-  companyId   String
-  vendorId    String
-  number      String
-  status      DocumentStatus @default(DRAFT)
-  orderDate   DateTime       @default(now())
-  totalAmount Decimal        @default(0) @db.Decimal(18, 2)
+  id                   String         @id @default(uuid())
+  tenantId             String
+  companyId            String
+  vendorId             String
+  number               String
+  status               DocumentStatus @default(DRAFT)
+  orderDate            DateTime       @default(now())
+  totalAmount          Decimal        @default(0) @db.Decimal(18, 2)
   expectedDeliveryDate DateTime?
   paymentTerms         String?
   freightTerms         String?
   buyerNotes           String?
   submittedAt          DateTime?
   approvedAt           DateTime?
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  version     Int            @default(1)
+  invoiceNumber        String?
+  shippedAt            DateTime?
+  invoicedAt           DateTime?
+  dueDate              DateTime?
+  paidAt               DateTime?
+  receivedAt           DateTime?
+  warehouseCode        String?
+  warehouseName        String?
+  purchaseType         String?
+  buyerRep             String?
+  enteredBy            String?
+  externalOrderRef     String?
+  cfop                 String?
+  taxSituation         String?
+  fiscalKey            String?
+  freightAmount        Decimal?       @db.Decimal(18, 2)
+  insuranceAmount      Decimal?       @db.Decimal(18, 2)
+  discountAmount       Decimal?       @db.Decimal(18, 2)
+  otherAmount          Decimal?       @db.Decimal(18, 2)
+  legacyMetadata       Json?
+  createdAt            DateTime       @default(now())
+  updatedAt            DateTime       @updatedAt
+  version              Int            @default(1)
 
   tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   company               Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)

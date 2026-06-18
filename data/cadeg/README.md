@@ -4,10 +4,32 @@ Place the legacy ERP exports here (or set `CADEG_DATA_DIR` to your folder path):
 
 | File | Purpose |
 |------|---------|
-| `exportar vendas.csv` | Sales history — used to extract **master data** (items, customers, suppliers, UOM aliases) |
-| `Exportar compras.csv` | Purchase cost aggregates — supplements item catalog |
+| `exportar vendas.csv` | Sales history — master data **and** transactional import (grouped by NF → `SalesOrder`) |
+| `Exportar compras.csv` | **Monthly product cost matrix** (FOB/CIF by month) — enriches item catalog only; **not** purchase invoices |
 
 Default path if unset: `CADEG DATA BASE/` at repository root.
+
+## Sales transaction headers
+
+When sales history is imported (`import:cadeg-history`), header fields from each NF group are persisted on `SalesOrder`:
+
+- Dates: emissão, saída, faturamento, vencimento, pagamento, entrega
+- Fiscal: NF, CFOP, situação tributária, chave NFE
+- Commercial: local, tipo de venda, atendente, pedido externo
+- Overflow columns → `legacyMetadata` (Setor, Equipe, Cidade, UF, etc.)
+
+To backfill headers on orders imported **before** this feature:
+
+```powershell
+pnpm --filter @navomnis/api run backfill:cadeg-headers -- --tenant-id=<uuid>
+# add --dry-run to preview counts
+```
+
+## Purchases
+
+There is **no purchase invoice CSV** in the CADEG folder today. `Exportar compras.csv` must not be imported as `PurchaseOrder` documents.
+
+Purchase order detail/list UIs show the same header layout as sales, using existing PO fields (`expectedDeliveryDate`, `paymentTerms`, …) plus symmetric schema fields for a future purchase NF import.
 
 ## Provision a new tenant
 

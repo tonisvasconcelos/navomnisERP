@@ -5,13 +5,35 @@ import { getApiErrorMessage } from '@/shared/api/errors';
 import { useForm } from 'react-hook-form';
 import { api } from '@/shared/api/client';
 import { ConfirmDialog } from '@/widgets/confirm-dialog';
+import { DocumentHeaderCard } from '@/widgets/document-header-card';
+import { buildPurchaseHeaderFields, formatCurrencyBrl } from '@/shared/format/document-header-fields';
 
 type OrderDetail = {
   id: string;
   number: string;
   status: string;
   totalAmount: unknown;
-  vendor?: { name: string };
+  invoiceNumber?: string | null;
+  orderDate?: string;
+  shippedAt?: string | null;
+  invoicedAt?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  receivedAt?: string | null;
+  expectedDeliveryDate?: string | null;
+  paymentTerms?: string | null;
+  freightTerms?: string | null;
+  buyerNotes?: string | null;
+  warehouseCode?: string | null;
+  warehouseName?: string | null;
+  purchaseType?: string | null;
+  buyerRep?: string | null;
+  enteredBy?: string | null;
+  externalOrderRef?: string | null;
+  cfop?: string | null;
+  fiscalKey?: string | null;
+  legacyMetadata?: Record<string, unknown> | null;
+  vendor?: { name: string; taxId?: string | null };
   lines: {
     id: string;
     quantity: unknown;
@@ -202,15 +224,29 @@ export function PurchasesDetailPage() {
         >
           ← Voltar à lista
         </button>
-        <h2 className="mt-2 text-xl font-semibold text-slate-900 dark:text-white" data-testid="purchase-order-title">
-          {isLoading ? 'A carregar…' : data?.number ?? 'Pedido'}
-        </h2>
-        {data && (
-          <p className="text-sm text-slate-500 dark:text-slate-400">
-            {data.vendor?.name} · <span data-testid="purchase-order-status">{data.status}</span>
-          </p>
-        )}
       </div>
+
+      {data && (
+        <DocumentHeaderCard
+          title={data.number}
+          subtitle={data.vendor?.name}
+          status={data.status}
+          totalAmount={data.totalAmount}
+          fields={buildPurchaseHeaderFields(data)}
+          legacyMetadata={{
+            ...(data.legacyMetadata ?? {}),
+            ...(data.buyerNotes ? { Notas: data.buyerNotes } : {}),
+          }}
+          titleTestId="purchase-order-title"
+          statusTestId="purchase-order-status"
+        />
+      )}
+
+      {!data && (
+        <h2 className="text-xl font-semibold text-slate-900 dark:text-white">
+          {isLoading ? 'A carregar…' : 'Pedido'}
+        </h2>
+      )}
 
       {apiError && (
         <p
@@ -329,10 +365,10 @@ export function PurchasesDetailPage() {
                           onChange={(e) => setEditCost(e.target.value)}
                         />
                       ) : (
-                        String(l.unitCost)
+                        formatCurrencyBrl(l.unitCost)
                       )}
                     </td>
-                    <td className="px-4 py-3 text-right tabular-nums">{String(l.lineTotal)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{formatCurrencyBrl(l.lineTotal)}</td>
                     {data.status === 'DRAFT' ? (
                       <td className="px-4 py-3 text-right">
                         {editing ? (

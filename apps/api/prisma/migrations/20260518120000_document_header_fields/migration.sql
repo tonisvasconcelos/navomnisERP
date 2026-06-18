@@ -1,0 +1,43 @@
+-- SalesOrder header enrichment (legacy CADEG import fields)
+ALTER TABLE "SalesOrder" ADD COLUMN "invoiceNumber" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "shippedAt" TIMESTAMP(3);
+ALTER TABLE "SalesOrder" ADD COLUMN "invoicedAt" TIMESTAMP(3);
+ALTER TABLE "SalesOrder" ADD COLUMN "dueDate" TIMESTAMP(3);
+ALTER TABLE "SalesOrder" ADD COLUMN "paidAt" TIMESTAMP(3);
+ALTER TABLE "SalesOrder" ADD COLUMN "deliveryDate" TIMESTAMP(3);
+ALTER TABLE "SalesOrder" ADD COLUMN "warehouseCode" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "warehouseName" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "saleType" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "salesRep" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "enteredBy" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "externalOrderRef" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "cfop" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "taxSituation" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "fiscalKey" TEXT;
+ALTER TABLE "SalesOrder" ADD COLUMN "freightAmount" DECIMAL(18,2);
+ALTER TABLE "SalesOrder" ADD COLUMN "insuranceAmount" DECIMAL(18,2);
+ALTER TABLE "SalesOrder" ADD COLUMN "discountAmount" DECIMAL(18,2);
+ALTER TABLE "SalesOrder" ADD COLUMN "otherAmount" DECIMAL(18,2);
+ALTER TABLE "SalesOrder" ADD COLUMN "legacyMetadata" JSONB;
+
+-- PurchaseOrder symmetric header fields
+ALTER TABLE "PurchaseOrder" ADD COLUMN "invoiceNumber" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "shippedAt" TIMESTAMP(3);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "invoicedAt" TIMESTAMP(3);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "dueDate" TIMESTAMP(3);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "paidAt" TIMESTAMP(3);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "receivedAt" TIMESTAMP(3);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "warehouseCode" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "warehouseName" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "purchaseType" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "buyerRep" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "enteredBy" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "externalOrderRef" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "cfop" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "taxSituation" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "fiscalKey" TEXT;
+ALTER TABLE "PurchaseOrder" ADD COLUMN "freightAmount" DECIMAL(18,2);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "insuranceAmount" DECIMAL(18,2);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "discountAmount" DECIMAL(18,2);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "otherAmount" DECIMAL(18,2);
+ALTER TABLE "PurchaseOrder" ADD COLUMN "legacyMetadata" JSONB;
