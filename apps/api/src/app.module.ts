@@ -33,6 +33,7 @@ import { UomModule } from './modules/uom/uom.module';
 import { ApprovalsModule } from './modules/approvals/approvals.module';
 import { DashboardsModule } from './modules/dashboards/dashboards.module';
 import { ImportsModule } from './modules/imports/imports.module';
+import { CadegModule } from './modules/cadeg/cadeg.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { ImportsModule } from './modules/imports/imports.module';
     ApprovalsModule,
     DashboardsModule,
     ImportsModule,
+    CadegModule,
     PlatformModule,
     SubscriptionModule,
   ],

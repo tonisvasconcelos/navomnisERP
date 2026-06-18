@@ -22,6 +22,8 @@
     "bootstrap:cadeg": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/bootstrap-cadeg-tenant.ts",
     "import:cadeg-history": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/import-cadeg-history.ts",
     "backfill:cadeg-headers": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/backfill-cadeg-sales-headers.ts",
+    "import:cadeg-purchases": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/import-cadeg-purchases.ts",
+    "post:cadeg-sales-inventory": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/post-cadeg-sales-inventory.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {
