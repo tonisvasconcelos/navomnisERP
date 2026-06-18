@@ -30,3 +30,29 @@ export function formatOptionalText(value?: string | null): string {
   if (!value?.trim()) return '—';
   return value.trim();
 }
+
+const DOCUMENT_STATUS_PT: Record<string, string> = {
+  DRAFT: 'Rascunho',
+  OPEN: 'Aberto',
+  RELEASED: 'Libertado',
+  POSTED: 'Lançado',
+  CANCELLED: 'Cancelado',
+  PENDING_APPROVAL: 'Aguardando aprovação',
+  APPROVED: 'Aprovado',
+  REJECTED: 'Rejeitado',
+  PARTIALLY_RECEIVED: 'Parcialmente recebido',
+  RECEIVED: 'Recebido',
+};
+
+export function formatDocumentStatusPt(status?: string | null): string {
+  if (!status?.trim()) return '—';
+  const key = status.trim().toUpperCase();
+  return DOCUMENT_STATUS_PT[key] ?? status;
+}
+
+export function documentStatusMatchesQuery(status: string, query: string): boolean {
+  const q = query.trim().toLowerCase();
+  if (!q) return true;
+  const pt = formatDocumentStatusPt(status).toLowerCase();
+  return status.toLowerCase().includes(q) || pt.includes(q);
+}

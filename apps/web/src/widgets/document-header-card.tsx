@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { formatCurrencyBrl } from '@/shared/format/document';
+import { formatCurrencyBrl, formatDocumentStatusPt } from '@/shared/format/document';
 
 export type DocumentHeaderField = {
   label: string;
@@ -76,7 +76,7 @@ export function DocumentHeaderCard({
             className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${statusBadgeClass(status)}`}
             data-testid={statusTestId}
           >
-            {status}
+            {formatDocumentStatusPt(status)}
           </span>
           {totalAmount !== undefined ? (
             <span

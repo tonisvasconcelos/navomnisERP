@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/shared/api/client';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { formatCurrencyBrl, formatDatePt } from '@/shared/format/document';
+import { formatCurrencyBrl, formatDatePt, formatDocumentStatusPt, documentStatusMatchesQuery } from '@/shared/format/document';
 
 type SalesOrderRow = {
   id: string;
@@ -28,7 +28,16 @@ export function SalesListPage() {
   const [customerId, setCustomerId] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [sortDesc, setSortDesc] = useState(true);
+
+  const orderQueryParams = useMemo(() => {
+    const params: Record<string, string> = { limit: '10000' };
+    if (fromDate) params.fromDate = fromDate;
+    if (toDate) params.toDate = toDate;
+    return params;
+  }, [fromDate, toDate]);
 
   const companiesQ = useQuery({
     queryKey: ['parties-companies'],
@@ -47,9 +56,9 @@ export function SalesListPage() {
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['sales-orders'],
+    queryKey: ['sales-orders', orderQueryParams],
     queryFn: async () => {
-      const { data: envelope } = await api.get('/sales/orders');
+      const { data: envelope } = await api.get('/sales/orders', { params: orderQueryParams });
       return unwrap<SalesOrderRow[]>(envelope);
     },
   });
@@ -63,10 +72,13 @@ export function SalesListPage() {
         (o) =>
           o.number.toLowerCase().includes(q) ||
           (o.customer?.name ?? '').toLowerCase().includes(q) ||
-          o.status.toLowerCase().includes(q),
+          documentStatusMatchesQuery(o.status, q),
       );
     }
     return [...rows].sort((a, b) => {
+      const aTime = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+      const bTime = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+      if (aTime !== bTime) return sortDesc ? bTime - aTime : aTime - bTime;
       const cmp = a.number.localeCompare(b.number, undefined, { numeric: true });
       return sortDesc ? -cmp : cmp;
     });
@@ -197,14 +209,45 @@ export function SalesListPage() {
             className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950"
           />
         </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="sales-from-date" className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Emissão de
+          </label>
+          <input
+            id="sales-from-date"
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="sales-to-date" className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Emissão até
+          </label>
+          <input
+            id="sales-to-date"
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+          />
+        </div>
         <button
           type="button"
           onClick={() => setSortDesc((v) => !v)}
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200"
         >
-          Ordenar n.º {sortDesc ? '↓' : '↑'}
+          Ordenar emissão {sortDesc ? '↓' : '↑'}
         </button>
       </div>
+
+      {!isLoading && data?.length ? (
+        <p className="text-xs text-slate-500 dark:text-slate-400">
+          {visibleOrders.length} de {data.length} pedidos
+          {fromDate || toDate ? ' (filtro de datas aplicado)' : ''}
+        </p>
+      ) : null}
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
         <table className="min-w-full text-left text-sm">
@@ -246,7 +289,7 @@ export function SalesListPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{o.customer?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDatePt(o.orderDate)}</td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{o.status}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDocumentStatusPt(o.status)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
                     {formatCurrencyBrl(o.totalAmount)}
                   </td>

@@ -16,7 +16,7 @@ test.describe('V1 sales (web)', () => {
     await expect(page.getByTestId('nav-sales')).toBeVisible({ timeout: 15_000 });
     await page.getByTestId('sales-new-order').click();
     await expect(page.getByTestId('sales-order-title')).toBeVisible();
-    await expect(page.getByTestId('sales-order-status')).toHaveText('DRAFT');
+    await expect(page.getByTestId('sales-order-status')).toHaveText('Rascunho');
 
     await page.getByTestId('sales-line-qty').fill('2');
     await page.getByTestId('sales-line-price').fill('10');
@@ -30,7 +30,7 @@ test.describe('V1 sales (web)', () => {
     await page.getByTestId('sales-release').click();
     await expect(page.getByTestId('release-confirm-modal')).toBeVisible();
     await page.getByTestId('release-confirm').click();
-    await expect(page.getByTestId('sales-order-status')).toHaveText('OPEN');
+    await expect(page.getByTestId('sales-order-status')).toHaveText('Aberto');
 
     await page.goto('/audit');
     await expect(page.getByTestId('audit-page-title')).toBeVisible();

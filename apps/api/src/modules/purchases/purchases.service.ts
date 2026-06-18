@@ -20,6 +20,7 @@ import { TenantFeatureFlagsService } from '../feature-flags/tenant-feature-flags
 import { UomConversionService } from '../uom/uom-conversion.service';
 import type { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import type { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
+import { parseOrderDateRange } from '../../common/dto/list-document-orders-query.dto';
 
 type PrismaTx = Parameters<Parameters<PrismaService['$transaction']>[0]>[0];
 
@@ -39,15 +40,21 @@ export class PurchasesService {
     return c;
   }
 
-  listOrders() {
+  listOrders(query?: { fromDate?: string; toDate?: string; limit?: number }) {
     const { tenantId } = this.ctx();
+    const take = Math.min(query?.limit ?? 10000, 15000);
+    const orderDate = parseOrderDateRange(query?.fromDate, query?.toDate);
     return this.prisma.purchaseOrder.findMany({
-      where: { tenantId },
+      where: { tenantId, ...(orderDate ? { orderDate } : {}) },
       orderBy: { orderDate: 'desc' },
-      take: 100,
-      include: {
-        vendor: true,
-        lines: { include: { item: true, transactionUom: true, baseUom: true } },
+      take,
+      select: {
+        id: true,
+        number: true,
+        status: true,
+        orderDate: true,
+        totalAmount: true,
+        vendor: { select: { id: true, name: true, taxId: true } },
       },
     });
   }

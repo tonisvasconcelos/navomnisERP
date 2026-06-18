@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -23,6 +24,7 @@ import {
 import { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
 import { ApprovalActionDto } from '../approvals/dto/approval.dto';
+import { ListDocumentOrdersQueryDto } from '../../common/dto/list-document-orders-query.dto';
 import { PurchasesService } from './purchases.service';
 
 @ApiTags('purchases')
@@ -35,8 +37,8 @@ export class PurchasesController {
   @Get('orders')
   @RequirePermissions('purchases.read')
   @ApiOperation({ summary: 'Listar pedidos de compra' })
-  orders() {
-    return this.purchases.listOrders();
+  orders(@Query() query: ListDocumentOrdersQueryDto) {
+    return this.purchases.listOrders(query);
   }
 
   @Post('orders')

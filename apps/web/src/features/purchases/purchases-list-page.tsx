@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '@/shared/api/client';
 import { getApiErrorMessage } from '@/shared/api/errors';
-import { formatCurrencyBrl, formatDatePt } from '@/shared/format/document';
+import { formatCurrencyBrl, formatDatePt, formatDocumentStatusPt, documentStatusMatchesQuery } from '@/shared/format/document';
 
 type PurchaseOrderRow = {
   id: string;
@@ -21,7 +21,17 @@ function unwrap<T>(envelope: unknown): T {
   return ((envelope as { data?: T }).data ?? envelope) as T;
 }
 
-const STATUS_OPTIONS = ['DRAFT', 'OPEN', 'RELEASED', 'POSTED', 'CANCELLED'] as const;
+const STATUS_OPTIONS = [
+  { value: 'DRAFT', label: 'Rascunho' },
+  { value: 'OPEN', label: 'Aberto' },
+  { value: 'RELEASED', label: 'Libertado' },
+  { value: 'POSTED', label: 'Lançado' },
+  { value: 'CANCELLED', label: 'Cancelado' },
+  { value: 'PENDING_APPROVAL', label: 'Aguardando aprovação' },
+  { value: 'APPROVED', label: 'Aprovado' },
+  { value: 'PARTIALLY_RECEIVED', label: 'Parcialmente recebido' },
+  { value: 'RECEIVED', label: 'Recebido' },
+] as const;
 
 export function PurchasesListPage() {
   const navigate = useNavigate();
@@ -31,7 +41,16 @@ export function PurchasesListPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
   const [sortDesc, setSortDesc] = useState(true);
+
+  const orderQueryParams = useMemo(() => {
+    const params: Record<string, string> = { limit: '10000' };
+    if (fromDate) params.fromDate = fromDate;
+    if (toDate) params.toDate = toDate;
+    return params;
+  }, [fromDate, toDate]);
 
   const companiesQ = useQuery({
     queryKey: ['parties-companies'],
@@ -50,9 +69,9 @@ export function PurchasesListPage() {
   });
 
   const { data, isLoading, error } = useQuery({
-    queryKey: ['purchase-orders'],
+    queryKey: ['purchase-orders', orderQueryParams],
     queryFn: async () => {
-      const { data: envelope } = await api.get('/purchases/orders');
+      const { data: envelope } = await api.get('/purchases/orders', { params: orderQueryParams });
       return unwrap<PurchaseOrderRow[]>(envelope);
     },
   });
@@ -69,10 +88,13 @@ export function PurchasesListPage() {
         (o) =>
           o.number.toLowerCase().includes(q) ||
           (o.vendor?.name ?? '').toLowerCase().includes(q) ||
-          o.status.toLowerCase().includes(q),
+          documentStatusMatchesQuery(o.status, q),
       );
     }
     return [...rows].sort((a, b) => {
+      const aTime = a.orderDate ? new Date(a.orderDate).getTime() : 0;
+      const bTime = b.orderDate ? new Date(b.orderDate).getTime() : 0;
+      if (aTime !== bTime) return sortDesc ? bTime - aTime : aTime - bTime;
       const cmp = a.number.localeCompare(b.number, undefined, { numeric: true });
       return sortDesc ? -cmp : cmp;
     });
@@ -216,18 +238,42 @@ export function PurchasesListPage() {
           >
             <option value="">Todos</option>
             {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {s}
+              <option key={s.value} value={s.value}>
+                {s.label}
               </option>
             ))}
           </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="purchases-from-date" className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Emissão de
+          </label>
+          <input
+            id="purchases-from-date"
+            type="date"
+            value={fromDate}
+            onChange={(e) => setFromDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="purchases-to-date" className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Emissão até
+          </label>
+          <input
+            id="purchases-to-date"
+            type="date"
+            value={toDate}
+            onChange={(e) => setToDate(e.target.value)}
+            className="rounded-lg border border-slate-200 px-2 py-1.5 text-sm dark:border-slate-700 dark:bg-slate-950"
+          />
         </div>
         <button
           type="button"
           onClick={() => setSortDesc((v) => !v)}
           className="rounded-lg border border-slate-200 px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-200"
         >
-          Ordenar n.º {sortDesc ? '↓' : '↑'}
+          Ordenar emissão {sortDesc ? '↓' : '↑'}
         </button>
       </div>
 
@@ -271,7 +317,7 @@ export function PurchasesListPage() {
                   </td>
                   <td className="px-4 py-3 text-slate-700 dark:text-slate-200">{o.vendor?.name ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDatePt(o.orderDate)}</td>
-                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{o.status}</td>
+                  <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{formatDocumentStatusPt(o.status)}</td>
                   <td className="px-4 py-3 text-right tabular-nums text-slate-800 dark:text-slate-100">
                     {formatCurrencyBrl(o.totalAmount)}
                   </td>

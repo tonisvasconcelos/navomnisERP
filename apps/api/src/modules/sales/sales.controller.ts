@@ -7,6 +7,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
   Req,
   UseGuards,
 } from '@nestjs/common';
@@ -18,6 +19,7 @@ import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { RequirePermissions } from '../../rbac/permissions.decorator';
 import { AddSalesOrderLineDto, CreateSalesOrderDto } from './dto/create-sales-order.dto';
 import { UpdateSalesOrderLineDto } from './dto/update-sales-order-line.dto';
+import { ListDocumentOrdersQueryDto } from '../../common/dto/list-document-orders-query.dto';
 import { SalesService } from './sales.service';
 
 @ApiTags('sales')
@@ -30,8 +32,8 @@ export class SalesController {
   @Get('orders')
   @RequirePermissions('sales.read')
   @ApiOperation({ summary: 'Listar pedidos de venda' })
-  orders() {
-    return this.sales.listOrders();
+  orders(@Query() query: ListDocumentOrdersQueryDto) {
+    return this.sales.listOrders(query);
   }
 
   @Post('orders')
