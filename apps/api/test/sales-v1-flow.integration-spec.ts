@@ -46,6 +46,14 @@ const DEMO_CUSTOMER = '00000000-0000-4000-8000-000000000030';
     const item = items.find((i) => i.sku === 'ITEM-001');
     expect(item).toBeDefined();
 
+    const uomRes = await request(app.getHttpServer())
+      .get(`/api/v1/uom/items/${item!.id}/available`)
+      .query({ context: 'sales', partyId: DEMO_CUSTOMER })
+      .set('Authorization', `Bearer ${accessToken}`)
+      .expect(200);
+    const transactionUomId = uomRes.body.data.defaultUomId as string;
+    expect(transactionUomId).toBeTruthy();
+
     const orderRes = await request(app.getHttpServer())
       .post('/api/v1/sales/orders')
       .set('Authorization', `Bearer ${accessToken}`)
@@ -57,14 +65,23 @@ const DEMO_CUSTOMER = '00000000-0000-4000-8000-000000000030';
     await request(app.getHttpServer())
       .post(`/api/v1/sales/orders/${orderId}/lines`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({ itemId: item!.id, quantity: '2', unitPrice: '10' })
+      .send({ itemId: item!.id, quantity: '2', unitPrice: '10', transactionUomId })
       .expect(200);
 
     const afterLine = await request(app.getHttpServer())
       .get(`/api/v1/sales/orders/${orderId}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
-    const lineId = (afterLine.body.data.lines as { id: string }[])[0]!.id;
+    const line = (afterLine.body.data.lines as {
+      id: string;
+      transactionUomId?: string;
+      baseUomId?: string;
+      baseQuantity?: unknown;
+    }[])[0]!;
+    const lineId = line.id;
+    expect(line.transactionUomId).toBe(transactionUomId);
+    expect(line.baseUomId).toBeTruthy();
+    expect(line.baseQuantity).toBeTruthy();
 
     await request(app.getHttpServer())
       .patch(`/api/v1/sales/orders/${orderId}/lines/${lineId}`)
@@ -82,8 +99,16 @@ const DEMO_CUSTOMER = '00000000-0000-4000-8000-000000000030';
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    const ledger = ledgerRes.body.data as { documentId: string | null; entryType: string }[];
-    expect(ledger.some((e) => e.documentId === orderId && e.entryType === 'SALES_RELEASE')).toBe(true);
+    const ledger = ledgerRes.body.data as {
+      documentId: string | null;
+      entryType: string;
+      transactionUomId?: string | null;
+      baseUomId?: string | null;
+    }[];
+    const releaseEntry = ledger.find((e) => e.documentId === orderId && e.entryType === 'SALES_RELEASE');
+    expect(releaseEntry).toBeDefined();
+    expect(releaseEntry!.transactionUomId).toBeTruthy();
+    expect(releaseEntry!.baseUomId).toBeTruthy();
 
     const auditCreate = await prisma.auditLog.count({
       where: { entityId: orderId, action: 'sales_order.create' },

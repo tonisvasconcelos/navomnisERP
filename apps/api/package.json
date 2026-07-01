@@ -24,6 +24,8 @@
     "backfill:cadeg-headers": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/backfill-cadeg-sales-headers.ts",
     "import:cadeg-purchases": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/import-cadeg-purchases.ts",
     "post:cadeg-sales-inventory": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/post-cadeg-sales-inventory.ts",
+    "cadeg:uom-rollout": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/cadeg-uom-rollout.ts",
+    "cadeg:uom-smoke": "cross-env TS_NODE_COMPILER_OPTIONS={\\\"module\\\":\\\"commonjs\\\"} ts-node scripts/smoke-cadeg-uom-api.ts",
     "postinstall": "prisma generate"
   },
   "dependencies": {

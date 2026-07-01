@@ -6,6 +6,7 @@ import { getTenantContext } from '../../tenant/tenant-storage';
 import { AuditService } from '../audit/audit.service';
 import { TenantFeatureFlagsService } from '../feature-flags/tenant-feature-flags.service';
 import { UomConversionService } from '../uom/uom-conversion.service';
+import { assertCompleteUomSnapshot } from '../uom/uom-line-validation';
 import type { UpdateSalesOrderLineDto } from './dto/update-sales-order-line.dto';
 import { parseOrderDateRange } from '../../common/dto/list-document-orders-query.dto';
 
@@ -154,7 +155,11 @@ export class SalesService {
       where: { id: lineId, orderId, order: { tenantId, status: DocumentStatus.DRAFT } },
     });
     if (!line) throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
-    const conv = await this.resolveLineConversion(line.itemId, dto.quantity, dto.transactionUomId);
+    const conv = await this.resolveLineConversion(
+      line.itemId,
+      dto.quantity,
+      dto.transactionUomId ?? line.transactionUomId ?? undefined,
+    );
     const lineTotal = conv.transactionQuantity.mul(new Prisma.Decimal(dto.unitPrice)).toDecimalPlaces(2);
     await this.prisma.salesOrderLine.update({
       where: { id: lineId },
@@ -185,10 +190,11 @@ export class SalesService {
   async releaseOrder(orderId: string, req?: Request) {
     const { tenantId, userId } = this.ctx();
     const fefoEnabled = await this.flags.isEnabled(tenantId, 'fefo_sales');
+    const uomEnforced = await this.flags.isEnabled(tenantId, 'uom_enforcement');
     const released = await this.prisma.$transaction(async (tx: PrismaTx) => {
       const order = await tx.salesOrder.findFirst({
         where: { id: orderId, tenantId },
-        include: { lines: true },
+        include: { lines: { include: { item: true } } },
       });
       if (!order) throw new NotFoundException('Pedido não encontrado.');
       if (order.status !== DocumentStatus.DRAFT) {
@@ -196,6 +202,12 @@ export class SalesService {
       }
       if (!order.lines.length) throw new BadRequestException('Pedido sem linhas.');
       await this.assertUserCompanyInTx(tx, userId, order.companyId);
+
+      if (uomEnforced) {
+        for (const line of order.lines) {
+          assertCompleteUomSnapshot(line, line.item.sku);
+        }
+      }
 
       const itemIds = [...new Set(order.lines.map((l) => l.itemId))];
       const grouped = await tx.itemLedgerEntry.groupBy({

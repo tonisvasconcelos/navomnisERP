@@ -1,22 +1,29 @@
 import { useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { api } from '@/shared/api/client';
 
 type LedgerRow = {
   id: string;
   entryType: string;
   quantity: unknown;
+  baseQuantity?: unknown;
   documentId: string | null;
   item: { sku: string; name: string };
+  transactionUom?: { code: string } | null;
+  baseUom?: { code: string } | null;
 };
 
 type BalanceRow = {
   itemId: string;
   sku: string;
   name: string;
+  baseUom?: string;
   quantityOnHand: unknown;
 };
 
 export function InventoryLedgerPage() {
+  const navigate = useNavigate();
+
   const balancesQ = useQuery({
     queryKey: ['inventory-balances'],
     queryFn: async () => {
@@ -50,7 +57,7 @@ export function InventoryLedgerPage() {
       <div className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Saldos (soma do ledger)</h3>
         <p className="mt-1 text-xs text-slate-500">
-          Usado na validação de stock ao libertar pedidos de venda.
+          Clique num artigo para ver detalhe, conversões UOM e lotes.
         </p>
         <div className="mt-3 overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -59,27 +66,37 @@ export function InventoryLedgerPage() {
                 <th className="py-2 pr-4">SKU</th>
                 <th className="py-2 pr-4">Artigo</th>
                 <th className="py-2 text-right">Saldo</th>
+                <th className="py-2 pl-2 text-left">UOM base</th>
               </tr>
             </thead>
             <tbody>
               {balancesQ.isLoading ? (
                 <tr>
-                  <td colSpan={3} className="py-3 text-slate-500">
+                  <td colSpan={4} className="py-3 text-slate-500">
                     A carregar…
                   </td>
                 </tr>
               ) : !balancesQ.data?.length ? (
                 <tr>
-                  <td colSpan={3} className="py-3 text-slate-500">
+                  <td colSpan={4} className="py-3 text-slate-500">
                     Sem artigos.
                   </td>
                 </tr>
               ) : (
                 balancesQ.data.map((b) => (
                   <tr key={b.itemId} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
-                    <td className="py-2 pr-4">{b.sku}</td>
+                    <td className="py-2 pr-4">
+                      <button
+                        type="button"
+                        className="font-medium text-blue-600 hover:underline dark:text-blue-400"
+                        onClick={() => navigate(`/inventory/items/${b.itemId}`)}
+                      >
+                        {b.sku}
+                      </button>
+                    </td>
                     <td className="py-2 pr-4">{b.name}</td>
                     <td className="py-2 text-right tabular-nums">{String(b.quantityOnHand)}</td>
+                    <td className="py-2 pl-2 text-slate-500">{b.baseUom ?? '—'}</td>
                   </tr>
                 ))
               )}
@@ -94,19 +111,20 @@ export function InventoryLedgerPage() {
             <tr>
               <th className="px-4 py-3">Tipo</th>
               <th className="px-4 py-3">SKU</th>
-              <th className="px-4 py-3 text-right">Quantidade</th>
+              <th className="px-4 py-3 text-right">Qtd trans.</th>
+              <th className="px-4 py-3 text-right">Qtd base</th>
             </tr>
           </thead>
           <tbody>
             {isLoading ? (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
                   A carregar…
                 </td>
               </tr>
             ) : !data?.length ? (
               <tr>
-                <td colSpan={3} className="px-4 py-6 text-center text-slate-500">
+                <td colSpan={4} className="px-4 py-6 text-center text-slate-500">
                   Sem lançamentos.
                 </td>
               </tr>
@@ -115,7 +133,12 @@ export function InventoryLedgerPage() {
                 <tr key={row.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                   <td className="px-4 py-3 font-mono text-xs">{row.entryType}</td>
                   <td className="px-4 py-3">{row.item.sku}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{String(row.quantity)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {String(row.quantity)} {row.transactionUom?.code ?? ''}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {String(row.baseQuantity ?? row.quantity)} {row.baseUom?.code ?? ''}
+                  </td>
                 </tr>
               ))
             )}

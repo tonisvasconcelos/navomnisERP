@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, ParseUUIDPipe, Post, Req, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import type { Request } from 'express';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
@@ -27,6 +27,13 @@ export class InventoryController {
   @ApiOperation({ summary: 'Saldo por artigo (soma do ledger)' })
   balances() {
     return this.inventory.balances();
+  }
+
+  @Get('items/:id')
+  @RequirePermissions('inventory.read')
+  @ApiOperation({ summary: 'Detalhe do artigo (estoque, UOM, lotes)' })
+  getItem(@Param('id', ParseUUIDPipe) id: string) {
+    return this.inventory.getItemDetail(id);
   }
 
   @Post('items')

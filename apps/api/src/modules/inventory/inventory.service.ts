@@ -1,4 +1,4 @@
-import { ForbiddenException, Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import type { Request } from 'express';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -65,8 +65,105 @@ export class InventoryService {
       where: { tenantId: ctx.tenantId },
       orderBy: { postingDate: 'desc' },
       take: 200,
-      include: { item: true },
+      include: {
+        item: true,
+        transactionUom: true,
+        baseUom: true,
+        lot: true,
+        warehouse: true,
+      },
     });
+  }
+
+  async getItemDetail(itemId: string) {
+    const ctx = getTenantContext();
+    if (!ctx) {
+      throw new ForbiddenException('Contexto de tenant ausente.');
+    }
+    const { tenantId } = ctx;
+
+    const item = await this.prisma.item.findFirst({
+      where: { id: itemId, tenantId },
+      include: { baseUomRef: true },
+    });
+    if (!item) throw new NotFoundException('Artigo não encontrado.');
+
+    const [ledgerAgg, recentLedger, conversions, supplierUoms, customerUoms, openLots, primaryMedia, valueEntries] =
+      await Promise.all([
+        this.prisma.itemLedgerEntry.aggregate({
+          where: { tenantId, itemId },
+          _sum: { baseQuantity: true, quantity: true },
+        }),
+        this.prisma.itemLedgerEntry.findMany({
+          where: { tenantId, itemId },
+          orderBy: { postingDate: 'desc' },
+          take: 20,
+          include: {
+            transactionUom: true,
+            baseUom: true,
+            lot: true,
+            warehouse: true,
+            zone: true,
+          },
+        }),
+        this.prisma.itemUomConversion.findMany({
+          where: { tenantId, itemId },
+          include: { fromUom: true, toUom: true },
+          orderBy: { validFrom: 'desc' },
+        }),
+        this.prisma.supplierItemUom.findMany({
+          where: { tenantId, itemId },
+          include: { supplier: true, purchaseUom: true, preferredCostUom: true },
+        }),
+        this.prisma.customerItemUom.findMany({
+          where: { tenantId, itemId },
+          include: { customer: true, saleUom: true, priceUom: true },
+        }),
+        this.prisma.inventoryLot.findMany({
+          where: { tenantId, itemId, quantityOnHandKg: { gt: 0 } },
+          orderBy: [{ expirationDate: 'asc' }, { receivedDate: 'asc' }],
+          take: 50,
+          include: { warehouse: true, zone: true },
+        }),
+        this.prisma.itemMedia.findFirst({
+          where: { tenantId, itemId, isPrimary: true },
+          orderBy: { sortOrder: 'asc' },
+        }),
+        this.prisma.inventoryValueEntry.findMany({
+          where: { tenantId, itemId },
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        }),
+      ]);
+
+    const quantityOnHand =
+      ledgerAgg._sum.baseQuantity ?? ledgerAgg._sum.quantity ?? new Prisma.Decimal(0);
+
+    const totalCost = valueEntries.reduce(
+      (acc, v) => acc.add(v.costAmount),
+      new Prisma.Decimal(0),
+    );
+
+    return {
+      id: item.id,
+      sku: item.sku,
+      name: item.name,
+      isActive: item.isActive,
+      baseUom: item.baseUomRef
+        ? { id: item.baseUomRef.id, code: item.baseUomRef.code, name: item.baseUomRef.name }
+        : { code: item.baseUom, name: item.baseUom },
+      primaryImageUrl: primaryMedia?.url ?? null,
+      quantityOnHand,
+      recentLedger,
+      uomConversions: conversions,
+      supplierItemUoms: supplierUoms,
+      customerItemUoms: customerUoms,
+      openLots,
+      valueSummary: {
+        recentEntryCount: valueEntries.length,
+        totalCostAmount: totalCost,
+      },
+    };
   }
 
   async createItem(dto: CreateItemDto, req?: Request) {

@@ -17,6 +17,9 @@ const SalesDetailPage = lazy(() =>
 const InventoryLedgerPage = lazy(() =>
   import('../features/inventory/inventory-ledger-page').then((m) => ({ default: m.InventoryLedgerPage })),
 );
+const ItemDetailPage = lazy(() =>
+  import('../features/inventory/item-detail-page').then((m) => ({ default: m.ItemDetailPage })),
+);
 const ProduceOperationsPage = lazy(() =>
   import('../features/produce/produce-operations-page').then((m) => ({ default: m.ProduceOperationsPage })),
 );
@@ -105,6 +108,7 @@ export default function App() {
           <Route path="sales" element={<SalesListPage />} />
           <Route path="sales/:id" element={<SalesDetailPage />} />
           <Route path="inventory" element={<InventoryLedgerPage />} />
+          <Route path="inventory/items/:itemId" element={<ItemDetailPage />} />
           <Route path="produce" element={<ProduceOperationsPage />} />
           <Route path="audit" element={<AuditLogPage />} />
           <Route path="fiscal" element={<FiscalWorkspacePage />} />

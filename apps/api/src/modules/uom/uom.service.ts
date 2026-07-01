@@ -2,11 +2,18 @@ import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/commo
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { getTenantContext } from '../../tenant/tenant-storage';
+import { MissingUomConversionException } from './missing-uom-conversion.exception';
 import type { CreateItemConversionDto, CreateUomAliasDto, CreateUomDto } from './dto/uom.dto';
+import { UomConversionService } from './uom-conversion.service';
+
+export type ItemAvailableUomContext = 'sales' | 'purchase' | 'receipt';
 
 @Injectable()
 export class UomService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly conversion: UomConversionService,
+  ) {}
 
   private ctx() {
     const c = getTenantContext();
@@ -104,6 +111,101 @@ export class UomService {
       orderBy: { createdAt: 'desc' },
       take: 200,
     });
+  }
+
+  async listAvailableUomsForItem(
+    itemId: string,
+    context: ItemAvailableUomContext,
+    partyId?: string,
+  ) {
+    const { tenantId } = this.ctx();
+    const item = await this.prisma.item.findFirst({
+      where: { id: itemId, tenantId, isActive: true },
+      include: { baseUomRef: true },
+    });
+    if (!item) throw new NotFoundException('Artigo não encontrado.');
+
+    let baseUomId = item.baseUomId;
+    let baseUomRecord = item.baseUomRef;
+    if (!baseUomId) {
+      baseUomRecord = await this.prisma.unitOfMeasure.findFirst({
+        where: { tenantId, code: item.baseUom.toUpperCase() },
+      });
+      baseUomId = baseUomRecord?.id ?? null;
+    }
+    if (!baseUomId || !baseUomRecord) {
+      throw new NotFoundException('UOM base do artigo não configurada.');
+    }
+
+    const conversions = await this.prisma.itemUomConversion.findMany({
+      where: { tenantId, itemId },
+      include: { fromUom: true, toUom: true },
+    });
+
+    const uomMap = new Map<string, { id: string; code: string; name: string }>();
+    uomMap.set(baseUomId, {
+      id: baseUomId,
+      code: baseUomRecord.code,
+      name: baseUomRecord.name,
+    });
+    for (const c of conversions) {
+      uomMap.set(c.fromUomId, { id: c.fromUom.id, code: c.fromUom.code, name: c.fromUom.name });
+      uomMap.set(c.toUomId, { id: c.toUom.id, code: c.toUom.code, name: c.toUom.name });
+    }
+
+    let defaultUomId = baseUomId;
+    if (context === 'sales' && partyId) {
+      const customerUom = await this.prisma.customerItemUom.findFirst({
+        where: { tenantId, itemId, customerId: partyId },
+      });
+      if (customerUom?.saleUomId && uomMap.has(customerUom.saleUomId)) {
+        defaultUomId = customerUom.saleUomId;
+      }
+    } else if ((context === 'purchase' || context === 'receipt') && partyId) {
+      const supplierUom = await this.prisma.supplierItemUom.findFirst({
+        where: { tenantId, itemId, supplierId: partyId },
+      });
+      if (supplierUom?.purchaseUomId && uomMap.has(supplierUom.purchaseUomId)) {
+        defaultUomId = supplierUom.purchaseUomId;
+      }
+    }
+
+    const available = await Promise.all(
+      [...uomMap.values()].map(async (uom) => {
+        const isBase = uom.id === baseUomId;
+        try {
+          const preview = await this.conversion.convertItemQuantity({
+            itemId,
+            quantity: '1',
+            fromUomId: uom.id,
+          });
+          return {
+            uomId: uom.id,
+            code: uom.code,
+            name: uom.name,
+            isBase,
+            conversionPreview: {
+              factor: preview.conversionFactor.toString(),
+              baseQuantity: preview.baseQuantity.toString(),
+              baseUomId: preview.baseUomId,
+            },
+          };
+        } catch (err) {
+          const warning =
+            err instanceof MissingUomConversionException
+              ? 'Conversão em falta para UOM base.'
+              : 'Não foi possível pré-visualizar conversão.';
+          return { uomId: uom.id, code: uom.code, name: uom.name, isBase, warning };
+        }
+      }),
+    );
+
+    return {
+      itemId,
+      baseUom: { id: baseUomId, code: baseUomRecord.code, name: baseUomRecord.name },
+      defaultUomId,
+      available,
+    };
   }
 
   /** Seed standard CADEG UOM codes for a tenant */

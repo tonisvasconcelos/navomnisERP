@@ -18,6 +18,7 @@ test.describe('V1 sales (web)', () => {
     await expect(page.getByTestId('sales-order-title')).toBeVisible();
     await expect(page.getByTestId('sales-order-status')).toHaveText('Rascunho');
 
+    await expect(page.getByTestId('sales-line-uom')).toHaveValue(/.+/, { timeout: 15_000 });
     await page.getByTestId('sales-line-qty').fill('2');
     await page.getByTestId('sales-line-price').fill('10');
     await page.getByTestId('sales-add-line').click();

@@ -18,6 +18,7 @@ import { AuditService } from '../audit/audit.service';
 import { ApprovalsService } from '../approvals/approvals.service';
 import { TenantFeatureFlagsService } from '../feature-flags/tenant-feature-flags.service';
 import { UomConversionService } from '../uom/uom-conversion.service';
+import { assertCompleteUomSnapshot } from '../uom/uom-line-validation';
 import type { ReceivePurchaseOrderDto } from './dto/receive-purchase-order.dto';
 import type { UpdatePurchaseOrderLineDto } from './dto/update-purchase-order-line.dto';
 import { parseOrderDateRange } from '../../common/dto/list-document-orders-query.dto';
@@ -198,7 +199,11 @@ export class PurchasesService {
       where: { id: lineId, orderId, order: { tenantId, status: DocumentStatus.DRAFT } },
     });
     if (!line) throw new NotFoundException('Linha não encontrada ou pedido não está em rascunho.');
-    const conv = await this.resolveLineConversion(line.itemId, dto.quantity, dto.transactionUomId);
+    const conv = await this.resolveLineConversion(
+      line.itemId,
+      dto.quantity,
+      dto.transactionUomId ?? line.transactionUomId ?? undefined,
+    );
     const cost = new Prisma.Decimal(dto.unitCost);
     const lineTotal = conv.transactionQuantity.mul(cost).toDecimalPlaces(2);
     await this.prisma.purchaseOrderLine.update({
@@ -286,10 +291,11 @@ export class PurchasesService {
   async releaseOrder(orderId: string, req?: Request) {
     const { tenantId, userId } = this.ctx();
     const approvalRequired = await this.flags.isEnabled(tenantId, 'po_approval_required');
+    const uomEnforced = await this.flags.isEnabled(tenantId, 'uom_enforcement');
     const released = await this.prisma.$transaction(async (tx: PrismaTx) => {
       const order = await tx.purchaseOrder.findFirst({
         where: { id: orderId, tenantId },
-        include: { lines: true },
+        include: { lines: { include: { item: true } } },
       });
       if (!order) throw new NotFoundException('Pedido de compra não encontrado.');
       const policy = await this.approvals.findPolicyForPurchaseOrder(tx, tenantId, order);
@@ -305,6 +311,11 @@ export class PurchasesService {
       if (!order.lines.length) throw new BadRequestException('Pedido sem linhas.');
       await this.assertUserCompanyInTx(tx, userId, order.companyId);
       await this.assertVendor(tx, tenantId, order.vendorId);
+      if (uomEnforced) {
+        for (const line of order.lines) {
+          assertCompleteUomSnapshot(line, line.item.sku);
+        }
+      }
       await tx.purchaseOrder.update({
         where: { id: order.id },
         data: { status: DocumentStatus.OPEN },
@@ -325,6 +336,7 @@ export class PurchasesService {
 
   async receiveOrder(orderId: string, dto: ReceivePurchaseOrderDto, req?: Request) {
     const { tenantId, userId } = this.ctx();
+    const uomEnforced = await this.flags.isEnabled(tenantId, 'uom_enforcement');
     const received = await this.prisma.$transaction(async (tx: PrismaTx) => {
       const order = await tx.purchaseOrder.findFirst({
         where: { id: orderId, tenantId },
@@ -358,22 +370,34 @@ export class PurchasesService {
         const txQty = new Prisma.Decimal(row.quantity);
         if (txQty.lte(0)) throw new BadRequestException('Quantidade de receção deve ser positiva.');
 
-        const conv = row.transactionUomId
-          ? await this.uom.convertItemQuantity({
-              itemId: line.itemId,
-              quantity: row.quantity,
-              fromUomId: row.transactionUomId,
-            })
-          : {
-              transactionQuantity: txQty,
-              transactionUomId: line.transactionUomId,
-              baseQuantity: line.baseQuantity
-                ? line.baseQuantity.mul(txQty.div(line.quantity))
-                : txQty,
-              baseUomId: line.baseUomId,
-              conversionFactor: line.conversionFactor ?? new Prisma.Decimal(1),
-              conversionTrace: line.conversionTrace ?? { path: 'line_prorate' },
-            };
+        const effectiveUomId = row.transactionUomId ?? line.transactionUomId ?? undefined;
+        let conv;
+        if (effectiveUomId) {
+          conv = await this.uom.convertItemQuantity({
+            itemId: line.itemId,
+            quantity: row.quantity,
+            fromUomId: effectiveUomId,
+          });
+        } else if (uomEnforced) {
+          throw new BadRequestException(
+            `UOM em falta na receção da linha ${line.id}. Indique transactionUomId ou corrija a linha do pedido.`,
+          );
+        } else {
+          conv = {
+            transactionQuantity: txQty,
+            transactionUomId: line.transactionUomId,
+            baseQuantity: line.baseQuantity
+              ? line.baseQuantity.mul(txQty.div(line.quantity))
+              : txQty,
+            baseUomId: line.baseUomId,
+            conversionFactor: line.conversionFactor ?? new Prisma.Decimal(1),
+            conversionTrace: line.conversionTrace ?? { path: 'line_prorate' },
+          };
+        }
+
+        if (uomEnforced && effectiveUomId && !row.transactionUomId) {
+          assertCompleteUomSnapshot(line);
+        }
 
         const already = await this.receivedBaseQtyForLine(tx, tenantId, line.id);
         const lineBase = line.baseQuantity ?? line.quantity;

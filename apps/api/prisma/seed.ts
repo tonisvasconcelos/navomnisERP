@@ -1,3 +1,7 @@
+/**
+ * Demo tenant seed only — do NOT run against CADEG production (`prisma db seed`).
+ * CADEG rollout: see docs/cadeg-uom-rollout.md (migrate deploy + cadeg:uom-rollout script).
+ */
 import {
   BrazilianFiscalRegime,
   BrazilianTaxKind,
@@ -240,6 +244,12 @@ async function main() {
       source: 'seed',
       validFrom: new Date('2026-01-01'),
     },
+  });
+
+  await prisma.tenantFeatureOverride.upsert({
+    where: { tenantId_moduleKey: { tenantId: tenant.id, moduleKey: 'uom_enforcement' } },
+    update: { enabled: true },
+    create: { tenantId: tenant.id, moduleKey: 'uom_enforcement', enabled: true },
   });
 
   await prisma.approvalPolicy.upsert({
@@ -539,11 +549,32 @@ async function main() {
             quantity: 1,
             unitCost: 50,
             lineTotal: 50,
+            transactionUomId: unUom.id,
+            baseUomId: unUom.id,
+            baseQuantity: 1,
+            conversionFactor: 1,
+            conversionTrace: { path: 'identity', fromUomId: unUom.id, toUomId: unUom.id },
           },
         ],
       },
     },
   });
+  const demoPo = await prisma.purchaseOrder.findFirst({
+    where: { tenantId: tenant.id, number: 'PC-0001' },
+    include: { lines: true },
+  });
+  if (demoPo?.lines[0]) {
+    await prisma.purchaseOrderLine.update({
+      where: { id: demoPo.lines[0].id },
+      data: {
+        transactionUomId: unUom.id,
+        baseUomId: unUom.id,
+        baseQuantity: demoPo.lines[0].quantity,
+        conversionFactor: 1,
+        conversionTrace: { path: 'identity', fromUomId: unUom.id, toUomId: unUom.id },
+      },
+    });
+  }
 
   await prisma.itemLedgerEntry.deleteMany({
     where: { tenantId: tenant.id, documentType: 'SEED' },

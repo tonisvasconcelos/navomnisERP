@@ -409,6 +409,7 @@ model Tenant {
   companies                Company[]
   parties                  Party[]
   items                    Item[]
+  itemMedia                ItemMedia[]
   roles                    Role[]
   notifications            Notification[]
   auditLogs                AuditLog[]
@@ -769,9 +770,29 @@ model Item {
   qualityInspections    QualityInspection[]
   inventoryLossEvents   InventoryLossEvent[]
   inventoryValueEntries InventoryValueEntry[]
+  media                 ItemMedia[]
 
   @@unique([tenantId, sku])
   @@index([tenantId, itemFiscalTemplateId])
+}
+
+model ItemMedia {
+  id         String   @id @default(uuid())
+  tenantId   String
+  itemId     String
+  storageKey String
+  url        String?
+  mimeType   String
+  sizeBytes  Int
+  isPrimary  Boolean  @default(false)
+  sortOrder  Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  item   Item   @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, itemId])
+  @@index([tenantId, itemId, isPrimary])
 }
 
 model ChartOfAccount {

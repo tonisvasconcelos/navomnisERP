@@ -1,10 +1,11 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Patch, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../../auth/guards/jwt-auth.guard';
 import { TenantAccessGuard } from '../../tenant/tenant-access.guard';
 import { PermissionsGuard } from '../../rbac/permissions.guard';
 import { RequirePermissions } from '../../rbac/permissions.decorator';
 import { CreateItemConversionDto, CreateUomAliasDto, CreateUomDto, ConvertQuantityDto } from './dto/uom.dto';
+import { ItemAvailableUomsQueryDto } from './dto/item-available-uoms-query.dto';
 import { UomConversionService } from './uom-conversion.service';
 import { UomService } from './uom.service';
 
@@ -46,6 +47,16 @@ export class UomController {
   @RequirePermissions('master.write')
   createAlias(@Body() dto: CreateUomAliasDto) {
     return this.uom.createAlias(dto);
+  }
+
+  @Get('items/:itemId/available')
+  @RequirePermissions('inventory.read')
+  @ApiOperation({ summary: 'UOMs disponíveis para artigo (vendas/compras/receção)' })
+  listAvailableForItem(
+    @Param('itemId', ParseUUIDPipe) itemId: string,
+    @Query() query: ItemAvailableUomsQueryDto,
+  ) {
+    return this.uom.listAvailableUomsForItem(itemId, query.context, query.partyId);
   }
 
   @Get('items/:itemId/conversions')

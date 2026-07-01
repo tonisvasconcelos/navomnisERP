@@ -7,6 +7,7 @@ import { api } from '@/shared/api/client';
 import { ConfirmDialog } from '@/widgets/confirm-dialog';
 import { DocumentHeaderCard } from '@/widgets/document-header-card';
 import { buildSalesHeaderFields, formatCurrencyBrl } from '@/shared/format/document-header-fields';
+import { useItemAvailableUoms } from '@/features/uom/use-item-available-uoms';
 
 type OrderDetail = {
   id: string;
@@ -29,14 +30,16 @@ type OrderDetail = {
   cfop?: string | null;
   fiscalKey?: string | null;
   legacyMetadata?: Record<string, unknown> | null;
-  customer?: { name: string; taxId?: string | null };
+  customer?: { id: string; name: string; taxId?: string | null };
   lines: {
     id: string;
     quantity: unknown;
     unitPrice: unknown;
     lineTotal: unknown;
-    transactionUom?: { code: string } | null;
-    item: { sku: string; name: string };
+    baseQuantity?: unknown;
+    transactionUom?: { id?: string; code: string } | null;
+    baseUom?: { code: string } | null;
+    item: { id: string; sku: string; name: string };
   }[];
 };
 
@@ -53,11 +56,13 @@ export function SalesDetailPage() {
   const navigate = useNavigate();
   const qc = useQueryClient();
   const [itemId, setItemId] = useState('');
+  const [transactionUomId, setTransactionUomId] = useState('');
   const [apiError, setApiError] = useState<string | null>(null);
   const [releaseModalOpen, setReleaseModalOpen] = useState(false);
   const [editingLineId, setEditingLineId] = useState<string | null>(null);
   const [editQty, setEditQty] = useState('');
   const [editPrice, setEditPrice] = useState('');
+  const [editUomId, setEditUomId] = useState('');
   const { register, handleSubmit, reset } = useForm<LineForm>({
     defaultValues: { quantity: '1', unitPrice: '10' },
   });
@@ -79,6 +84,21 @@ export function SalesDetailPage() {
     },
   });
 
+  const uomsQ = useItemAvailableUoms(itemId, 'sales', data?.customer?.id);
+  const uomUnavailable =
+    Boolean(itemId) &&
+    !uomsQ.isLoading &&
+    (uomsQ.isError || (uomsQ.isSuccess && !uomsQ.data?.available.length));
+
+  useEffect(() => {
+    if (uomsQ.data?.defaultUomId) {
+      setTransactionUomId(uomsQ.data.defaultUomId);
+    }
+  }, [uomsQ.data?.defaultUomId, itemId]);
+
+  const editingLine = data?.lines.find((l) => l.id === editingLineId);
+  const editUomsQ = useItemAvailableUoms(editingLine?.item.id, 'sales', data?.customer?.id);
+
   useEffect(() => {
     if (itemsQ.data?.length && !itemId) {
       const preferred = itemsQ.data.find((i) => i.sku === 'ITEM-001') ?? itemsQ.data[0];
@@ -91,10 +111,14 @@ export function SalesDetailPage() {
       if (!itemId) {
         throw new Error('Selecione um artigo.');
       }
+      if (!transactionUomId) {
+        throw new Error('Selecione a UOM.');
+      }
       await api.post(`/sales/orders/${id}/lines`, {
         itemId,
         quantity: values.quantity,
         unitPrice: values.unitPrice,
+        transactionUomId,
       });
     },
     onSuccess: async () => {
@@ -123,8 +147,22 @@ export function SalesDetailPage() {
   });
 
   const updateLine = useMutation({
-    mutationFn: async ({ lineId, quantity, unitPrice }: { lineId: string; quantity: string; unitPrice: string }) => {
-      await api.patch(`/sales/orders/${id}/lines/${lineId}`, { quantity, unitPrice });
+    mutationFn: async ({
+      lineId,
+      quantity,
+      unitPrice,
+      uomId,
+    }: {
+      lineId: string;
+      quantity: string;
+      unitPrice: string;
+      uomId: string;
+    }) => {
+      await api.patch(`/sales/orders/${id}/lines/${lineId}`, {
+        quantity,
+        unitPrice,
+        transactionUomId: uomId,
+      });
     },
     onSuccess: async () => {
       setApiError(null);
@@ -214,6 +252,16 @@ export function SalesDetailPage() {
         </p>
       )}
 
+      {data?.status === 'DRAFT' && uomUnavailable && (
+        <p
+          className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+          data-testid="sales-uom-unavailable"
+        >
+          UOM indisponível para este artigo — atualize a aplicação ou contacte suporte. Não é possível
+          adicionar linhas até a UOM estar disponível.
+        </p>
+      )}
+
       {data?.status === 'DRAFT' && (
         <form
           className="flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900"
@@ -234,6 +282,25 @@ export function SalesDetailPage() {
               {(itemsQ.data ?? []).map((i) => (
                 <option key={i.id} value={i.id}>
                   {i.sku} — {i.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="sales-line-uom">
+              UOM
+            </label>
+            <select
+              id="sales-line-uom"
+              data-testid="sales-line-uom"
+              className="min-w-[6rem] rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+              value={transactionUomId}
+              onChange={(e) => setTransactionUomId(e.target.value)}
+              disabled={!itemId || uomsQ.isLoading || !uomsQ.data?.available.length}
+            >
+              {(uomsQ.data?.available ?? []).map((u) => (
+                <option key={u.uomId} value={u.uomId}>
+                  {u.code}
                 </option>
               ))}
             </select>
@@ -263,7 +330,7 @@ export function SalesDetailPage() {
           <button
             type="submit"
             data-testid="sales-add-line"
-            disabled={addLine.isPending || !itemId}
+            disabled={addLine.isPending || !itemId || !transactionUomId || uomUnavailable}
             className="rounded-lg bg-slate-800 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 disabled:opacity-60 dark:bg-slate-200 dark:text-slate-900 dark:hover:bg-white"
           >
             {addLine.isPending ? 'A guardar…' : 'Adicionar linha'}
@@ -279,6 +346,7 @@ export function SalesDetailPage() {
               <th className="px-4 py-3">Artigo</th>
               <th className="px-4 py-3">UOM</th>
               <th className="px-4 py-3 text-right">Qtd</th>
+              <th className="px-4 py-3 text-right">Qtd base</th>
               <th className="px-4 py-3 text-right">Preço</th>
               <th className="px-4 py-3 text-right">Total linha</th>
               {data?.status === 'DRAFT' ? <th className="px-4 py-3 text-right">Ações</th> : null}
@@ -287,7 +355,7 @@ export function SalesDetailPage() {
           <tbody>
             {!data?.lines?.length ? (
               <tr>
-                <td colSpan={data?.status === 'DRAFT' ? 7 : 6} className="px-4 py-4 text-center text-slate-500">
+                <td colSpan={data?.status === 'DRAFT' ? 8 : 7} className="px-4 py-4 text-center text-slate-500">
                   Sem linhas.
                 </td>
               </tr>
@@ -298,7 +366,24 @@ export function SalesDetailPage() {
                   <tr key={l.id} className="border-b border-slate-100 last:border-0 dark:border-slate-800">
                     <td className="px-4 py-3">{l.item.sku}</td>
                     <td className="px-4 py-3">{l.item.name}</td>
-                    <td className="px-4 py-3 text-slate-500">{l.transactionUom?.code ?? '—'}</td>
+                    <td className="px-4 py-3 text-slate-500">
+                      {editing ? (
+                        <select
+                          data-testid="sales-line-edit-uom"
+                          className="rounded border border-slate-300 px-2 py-1 text-sm dark:border-slate-600 dark:bg-slate-950 dark:text-white"
+                          value={editUomId}
+                          onChange={(e) => setEditUomId(e.target.value)}
+                        >
+                          {(editUomsQ.data?.available ?? []).map((u) => (
+                            <option key={u.uomId} value={u.uomId}>
+                              {u.code}
+                            </option>
+                          ))}
+                        </select>
+                      ) : (
+                        (l.transactionUom?.code ?? '—')
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {editing ? (
                         <input
@@ -310,6 +395,11 @@ export function SalesDetailPage() {
                       ) : (
                         String(l.quantity)
                       )}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums text-slate-500">
+                      {l.baseQuantity != null
+                        ? `${String(l.baseQuantity)} ${l.baseUom?.code ?? ''}`.trim()
+                        : '—'}
                     </td>
                     <td className="px-4 py-3 text-right tabular-nums">
                       {editing ? (
@@ -338,6 +428,7 @@ export function SalesDetailPage() {
                                   lineId: l.id,
                                   quantity: editQty,
                                   unitPrice: editPrice,
+                                  uomId: editUomId,
                                 })
                               }
                             >
@@ -362,6 +453,7 @@ export function SalesDetailPage() {
                                 setEditingLineId(l.id);
                                 setEditQty(String(l.quantity));
                                 setEditPrice(String(l.unitPrice));
+                                setEditUomId(l.transactionUom?.id ?? '');
                               }}
                             >
                               Editar

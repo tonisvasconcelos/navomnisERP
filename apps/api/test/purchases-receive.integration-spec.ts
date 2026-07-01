@@ -4,6 +4,7 @@ import request from 'supertest';
 import { DocumentStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createIntegrationApp } from './helpers/create-integration-app';
+import { ensurePurchaseLineUomSnapshot, getDemoUnUomId } from './helpers/integration-uom';
 
 const run =
   process.env.CI === 'true' ||
@@ -14,10 +15,12 @@ const run =
   let app: INestApplication;
   let prisma: PrismaService;
   let accessToken: string;
+  let unUomId: string;
 
   beforeAll(async () => {
     app = await createIntegrationApp();
     prisma = app.get(PrismaService);
+    unUomId = await getDemoUnUomId(prisma);
     const login = await request(app.getHttpServer())
       .post('/api/v1/auth/login')
       .send({
@@ -39,6 +42,7 @@ const run =
     });
     expect(po).toBeTruthy();
     const lineId = po!.lines[0]!.id;
+    await ensurePurchaseLineUomSnapshot(prisma, lineId, unUomId, po!.lines[0]!.quantity);
 
     await prisma.itemLedgerEntry.deleteMany({
       where: {
@@ -70,6 +74,46 @@ const run =
     });
     expect(ledger.length).toBe(1);
     expect(new Prisma.Decimal(ledger[0]!.quantity).toNumber()).toBe(1);
+    expect(ledger[0]!.transactionUomId).toBe(unUomId);
+    expect(ledger[0]!.baseUomId).toBe(unUomId);
+  });
+
+  it('rejects receive when uom_enforcement on and PO line has no UOM snapshot', async () => {
+    const po = await prisma.purchaseOrder.findFirst({
+      where: { number: 'PC-0001' },
+      include: { lines: true },
+    });
+    expect(po).toBeTruthy();
+    const lineId = po!.lines[0]!.id;
+
+    await prisma.purchaseOrderLine.update({
+      where: { id: lineId },
+      data: {
+        transactionUomId: null,
+        baseUomId: null,
+        baseQuantity: null,
+        conversionTrace: Prisma.DbNull,
+      },
+    });
+    await prisma.itemLedgerEntry.deleteMany({
+      where: {
+        tenantId: po!.tenantId,
+        documentType: 'PURCHASE_ORDER_LINE',
+        documentId: lineId,
+      },
+    });
+    await prisma.purchaseOrder.update({
+      where: { id: po!.id },
+      data: { status: DocumentStatus.OPEN },
+    });
+
+    await request(app.getHttpServer())
+      .post(`/api/v1/purchases/orders/${po!.id}/receive`)
+      .set('Authorization', `Bearer ${accessToken}`)
+      .send({ lines: [{ lineId, quantity: '1' }] })
+      .expect(400);
+
+    await ensurePurchaseLineUomSnapshot(prisma, lineId, unUomId, po!.lines[0]!.quantity);
   });
 
   it('rejects duplicate receive over ordered quantity', async () => {
@@ -78,6 +122,7 @@ const run =
       include: { lines: true },
     });
     const lineId = po!.lines[0]!.id;
+    await ensurePurchaseLineUomSnapshot(prisma, lineId, unUomId, po!.lines[0]!.quantity);
     await prisma.itemLedgerEntry.deleteMany({
       where: {
         tenantId: po!.tenantId,

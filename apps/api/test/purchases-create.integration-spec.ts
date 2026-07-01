@@ -3,6 +3,7 @@ import request from 'supertest';
 import { DocumentStatus } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { createIntegrationApp } from './helpers/create-integration-app';
+import { getDemoUnUomId } from './helpers/integration-uom';
 
 const run =
   process.env.CI === 'true' ||
@@ -16,6 +17,7 @@ const run =
   let companyId: string;
   let vendorId: string;
   let itemId: string;
+  let unUomId: string;
 
   beforeAll(async () => {
     app = await createIntegrationApp();
@@ -46,6 +48,7 @@ const run =
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
     itemId = items.body.data[0].id as string;
+    unUomId = await getDemoUnUomId(prisma);
   }, 120_000);
 
   afterAll(async () => {
@@ -62,11 +65,15 @@ const run =
     const orderId = create.body.data.id as string;
     expect(create.body.data.status).toBe(DocumentStatus.DRAFT);
 
-    await request(app.getHttpServer())
+    const addLine = await request(app.getHttpServer())
       .post(`/api/v1/purchases/orders/${orderId}/lines`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .send({ itemId, quantity: '2', unitCost: '5' })
+      .send({ itemId, quantity: '2', unitCost: '5', transactionUomId: unUomId })
       .expect(200);
+
+    expect(addLine.body.data.lines[0].transactionUomId).toBe(unUomId);
+    expect(addLine.body.data.lines[0].baseUomId).toBeTruthy();
+    expect(addLine.body.data.lines[0].baseQuantity).toBeTruthy();
 
     const release = await request(app.getHttpServer())
       .post(`/api/v1/purchases/orders/${orderId}/release`)
