@@ -1,0 +1,12 @@
+CADEG DATA BASE/
+PublicFolder/
+**/node_modules/
+**/.turbo/
+**/dist/
+**/.vercel/
+apps/admin/dist/
+apps/web/dist/
+.git/
+.cursor/
+coverage/
+**/*.log

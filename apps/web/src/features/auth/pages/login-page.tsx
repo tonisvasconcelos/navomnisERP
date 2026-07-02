@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../auth-store';
 import { LoginBackgroundCarousel } from '../components/login-background-carousel';
+import { LOGIN_BACKGROUND_ACTIVE } from '../login-backgrounds';
 import { api } from '@/shared/api/client';
 
 const schema = z.object({
@@ -48,7 +49,7 @@ export function LoginPage() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center p-4">
-      <LoginBackgroundCarousel />
+      <LoginBackgroundCarousel images={LOGIN_BACKGROUND_ACTIVE} />
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}

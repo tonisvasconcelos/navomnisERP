@@ -22,6 +22,8 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,svg,woff2,jpg,jpeg,webp}'],
         globIgnores: ['**/login/**'],
+        cleanupOutdatedCaches: true,
+        navigateFallbackDenylist: [/^\/assets\//],
       },
     }),
   ],

@@ -61,6 +61,30 @@ Confirme no `dist/assets/*.js` que aparece o host da API (ex. `api-staging-fa90`
 
 Para testes no browser, desative **Settings → Deployment Protection → Vercel Authentication** em `web` e `navomnis-admin` (Production e Preview), ou use **Shareable Links**.
 
+### Gate UAT antes de demos externas
+
+Antes de partilhar URLs de produção com utilizadores externos, confirme que **Vercel Authentication** está **desligada** no projeto `web` (Production e Preview, se aplicável):
+
+1. **Settings → Deployment Protection → Vercel Authentication** — toggle **OFF** e **Save**
+2. Verifique também **Team Settings → Deployment Protection** — políticas ao nível da equipa podem reativar proteção em novos deploys
+3. Smoke test em janela anónima/incógnito:
+
+   ```powershell
+   curl.exe -sI "https://web-oss365.vercel.app/login" | findstr /i "HTTP Location"
+   ```
+
+   - **Esperado:** `HTTP/1.1 200 OK` e HTML da SPA (`index.html`)
+   - **Sintoma se reativado:** `HTTP/1.1 302` com `Location: https://vercel.com/sso-api?...`
+
+Para desativar via API (automação ou quando o CLI não expõe o subcomando `project protection`):
+
+```powershell
+$auth = Get-Content "$env:APPDATA\com.vercel.cli\Data\auth.json" | ConvertFrom-Json
+$headers = @{ Authorization = "Bearer $($auth.token)"; "Content-Type" = "application/json" }
+$body = @{ ssoProtection = $null } | ConvertTo-Json
+Invoke-RestMethod -Method PATCH -Uri "https://api.vercel.com/v9/projects/web?teamId=TEAM_ID" -Headers $headers -Body $body
+```
+
 ## MCP da Vercel no Cursor
 
 Ver [mcp-vercel.md](./mcp-vercel.md).

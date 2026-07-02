@@ -1,4 +1,9 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
+import {
+  clearChunkReloadFlag,
+  isChunkLoadError,
+  reloadForNewDeploy,
+} from '../lib/chunk-load-recovery';
 
 type Props = { children: ReactNode };
 type State = { error: Error | null };
@@ -12,14 +17,30 @@ export class AppErrorBoundary extends Component<Props, State> {
 
   componentDidCatch(error: Error, info: ErrorInfo) {
     console.error('AppErrorBoundary', error, info.componentStack);
+    if (isChunkLoadError(error.message)) {
+      reloadForNewDeploy();
+    }
   }
 
   render() {
     if (this.state.error) {
+      const chunkError = isChunkLoadError(this.state.error.message);
       return (
         <ErrorFallbackView
-          message={this.state.error.message}
-          onRetry={() => this.setState({ error: null })}
+          message={
+            chunkError
+              ? 'Nova versão da aplicação disponível. Atualize para continuar.'
+              : this.state.error.message
+          }
+          onRetry={() => {
+            if (chunkError) {
+              clearChunkReloadFlag();
+              window.location.reload();
+              return;
+            }
+            this.setState({ error: null });
+          }}
+          retryLabel={chunkError ? 'Atualizar aplicação' : 'Tentar novamente'}
         />
       );
     }
@@ -27,7 +48,15 @@ export class AppErrorBoundary extends Component<Props, State> {
   }
 }
 
-function ErrorFallbackView({ message, onRetry }: { message: string; onRetry: () => void }) {
+function ErrorFallbackView({
+  message,
+  onRetry,
+  retryLabel,
+}: {
+  message: string;
+  onRetry: () => void;
+  retryLabel: string;
+}) {
   return (
     <div
       className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 p-6 dark:bg-slate-950"
@@ -40,7 +69,7 @@ function ErrorFallbackView({ message, onRetry }: { message: string; onRetry: () 
         className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500"
         onClick={onRetry}
       >
-        Tentar novamente
+        {retryLabel}
       </button>
     </div>
   );

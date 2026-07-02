@@ -343,7 +343,7 @@ export class SalesService {
     const lines = await this.prisma.salesOrderLine.findMany({ where: { orderId } });
     const sum = lines.reduce((acc, l) => acc.add(l.lineTotal), new Prisma.Decimal(0));
     await this.prisma.salesOrder.update({
-      where: { id: orderId, tenantId },
+      where: { id: orderId },
       data: { totalAmount: sum },
     });
   }

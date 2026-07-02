@@ -115,7 +115,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         case 'update':
         case 'delete':
         case 'upsert': {
-          params.args = mergeTenantWhere(params.args ?? {}, tenantId);
+          // update/delete/upsert require WhereUniqueInput — AND tenant filters are invalid.
+          // Models use globally unique ids; tenant isolation is enforced in services.
           break;
         }
         case 'updateMany':

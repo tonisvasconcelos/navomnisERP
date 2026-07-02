@@ -9,7 +9,10 @@ import { I18nextProvider, initReactI18next } from 'react-i18next';
 import { resources, defaultLocale } from '@navomnis/i18n';
 import App from './app/App';
 import { AppErrorBoundary } from './widgets/app-error-boundary';
+import { registerChunkLoadRecovery } from './lib/chunk-load-recovery';
 import './index.css';
+
+registerChunkLoadRecovery();
 
 if (env.VITE_SENTRY_DSN) {
   Sentry.init({
